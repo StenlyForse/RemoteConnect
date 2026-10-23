@@ -10,7 +10,7 @@
                     <TextBlock x:Name="Stats" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,14,0" FontFamily="Consolas" FontSize="12" />
                     <ToggleButton x:Name="ClipboardToggle" Content="Буфер обмена" IsChecked="True" Margin="0,0,8,0" Padding="10,4"
                                   Checked="Clipboard_Changed" Unchecked="Clipboard_Changed"
-                                  ToolTip="Синхронизировать буфер обмена с удалённым ПК (текст и картинки)" />
+                                  ToolTip="Синхронизировать буфер обмена с удалённым ПК (текст, картинки, файлы)" />
                     <ComboBox x:Name="Monitors" MinWidth="170" Margin="0,0,8,0" SelectionChanged="Monitors_SelectionChanged" Visibility="Collapsed" />
                     <Button x:Name="FullScreenButton" Content="Полный экран" Click="FullScreen_Click" Margin="0,0,8,0" Padding="10,4" />
                     <Button Content="Отключить" Style="{StaticResource DangerButton}" Click="Disconnect_Click" Padding="12,4" />
@@ -18,6 +18,7 @@
                 <TextBlock Foreground="White" VerticalAlignment="Center" FontSize="13">
                     <Run x:Name="PeerName" FontWeight="SemiBold" /><Run Text="   " /><Run x:Name="FingerprintRun" Foreground="#64748B" FontFamily="Consolas" FontSize="11" />
                     <Run x:Name="InputDisabledRun" Foreground="#FBBF24" Text="" />
+                    <Run x:Name="FileStatusRun" Foreground="#93C5FD" Text="" />
                 </TextBlock>
             </DockPanel>
         </Border>

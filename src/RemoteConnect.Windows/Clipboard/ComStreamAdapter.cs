@@ -25,7 +25,9 @@ public sealed class ComStreamAdapter(Stream source, long size, string name, Date
     private const int STREAM_SEEK_END = 2;
 
     private long _position;
-    private bool _closed;
+    private volatile bool _closed;
+
+    public bool IsClosed => _closed;
 
     public void Read(byte[] pv, int cb, IntPtr pcbRead)
     {

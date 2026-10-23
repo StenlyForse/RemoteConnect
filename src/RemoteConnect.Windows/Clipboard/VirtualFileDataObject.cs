@@ -49,6 +49,7 @@ public sealed class VirtualFileDataObject : ComIDataObject, IDataObjectAsyncCapa
 
     private readonly IReadOnlyList<FileOfferEntry> _entries;
     private readonly Func<int, Stream> _openFile;
+    private readonly List<ComStreamAdapter> _streams = [];
     private bool _asyncMode = true;
     private bool _inOperation;
 
@@ -99,6 +100,12 @@ public sealed class VirtualFileDataObject : ComIDataObject, IDataObjectAsyncCapa
 
             var entry = _entries[index];
             var stream = new ComStreamAdapter(_openFile(index), entry.Size, Path.GetFileName(entry.RelativePath), entry.LastWriteUtc);
+            lock (_streams)
+            {
+                _streams.RemoveAll(s => s.IsClosed);
+                _streams.Add(stream);
+            }
+
             medium = new STGMEDIUM
             {
                 tymed = TYMED.TYMED_ISTREAM,
@@ -202,6 +209,21 @@ public sealed class VirtualFileDataObject : ComIDataObject, IDataObjectAsyncCapa
     {
         Trace?.Invoke($"EndOperation hr=0x{result:X8} effects={effects}");
         _inOperation = false;
+
+        // При «Отмене» Проводник только отпускает поток, не закрывая его, — закрываем недочитанные сами,
+        // чтобы передача на другом ПК остановилась сразу (FR-FCB-11), а не при сборке мусора.
+        List<ComStreamAdapter> streams;
+        lock (_streams)
+        {
+            streams = [.. _streams];
+            _streams.Clear();
+        }
+
+        foreach (var stream in streams)
+        {
+            stream.Close();
+        }
+
         OperationEnded?.Invoke(result);
     }
 

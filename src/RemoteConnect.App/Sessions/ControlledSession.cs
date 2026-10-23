@@ -36,6 +36,7 @@ public sealed class ControlledSession(Connection connection, string peerName, in
         };
         bar.ClipboardChanged += enabled => _clipboard.SetLocalEnabled(enabled);
         _clipboard.RemoteEnabledChanged += bar.SetRemoteClipboardEnabled;
+        _clipboard.StatusChanged += bar.SetFileStatus;
         bar.Show();
         _clipboard.Start();
 

@@ -36,6 +36,13 @@ public partial class SessionBarWindow : Window
         ClipboardToggle.Content = enabled ? "Буфер обмена" : "Буфер обмена (выкл. у собеседника)";
     }
 
+    /// <summary>Передача файлов или уведомление о них (FR-FCB-19, 20); пустая строка скрывает.</summary>
+    public void SetFileStatus(string status)
+    {
+        FileStatus.Text = status;
+        FileStatus.Visibility = status.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     public void CloseForced()
     {
         _forceClose = true;

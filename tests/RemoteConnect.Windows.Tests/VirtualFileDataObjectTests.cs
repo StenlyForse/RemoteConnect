@@ -77,6 +77,27 @@ public class VirtualFileDataObjectTests
         Assert.Equal(DV_E_LINDEX, error.HResult);
     }
 
+    /// <summary>«Отмена» в Проводнике: EndOperation с ошибкой, поток не закрыт Проводником — закрываем сами.</summary>
+    [Fact]
+    public void EndOperation_ClosesUnfinishedStreams()
+    {
+        var opened = new List<TrackingStream>();
+        var data = new VirtualFileDataObject(Entries, _ =>
+        {
+            var s = new TrackingStream();
+            opened.Add(s);
+            return s;
+        });
+
+        data.StartOperation(IntPtr.Zero);
+        GetContents(data, 2);
+        GetContents(data, 3);
+        data.EndOperation(unchecked((int)0x800704C7), IntPtr.Zero, 1);
+
+        Assert.Equal(2, opened.Count);
+        Assert.All(opened, s => Assert.True(s.Disposed));
+    }
+
     [Fact]
     public void FileContents_FromRemoteSource_RequestsDataOnlyWhenRead()
     {
@@ -183,6 +204,17 @@ public class VirtualFileDataObjectTests
         Assert.Null(readerError);
         Assert.Equal(Entries.Select(e => e.RelativePath), descriptors!.Select(d => d.Name));
         Assert.Equal(content, read);
+    }
+
+    private sealed class TrackingStream : MemoryStream
+    {
+        public bool Disposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            Disposed = true;
+            base.Dispose(disposing);
+        }
     }
 
     private sealed record Descriptor(uint Flags, uint Attributes, DateTime LastWriteUtc, long Size, string Name);

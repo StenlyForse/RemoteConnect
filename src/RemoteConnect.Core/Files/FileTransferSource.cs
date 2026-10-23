@@ -1,4 +1,4 @@
-using RemoteConnect.Core.Protocol;
+﻿using RemoteConnect.Core.Protocol;
 
 namespace RemoteConnect.Core.Files;
 
@@ -20,6 +20,12 @@ public sealed class FileTransferSource : IDisposable
 {
     public const int WindowBytes = 1024 * 1024;
     public const int MaxConcurrentTransfers = 4;
+
+    /// <summary>
+    /// Окно заполнено, а подтверждений нет столько времени — получатель бросил чтение, не сообщив
+    /// (программа без асинхронной вставки, сбой Проводника). Передача прекращается.
+    /// </summary>
+    public static readonly TimeSpan AckTimeout = TimeSpan.FromSeconds(60);
 
     private readonly Func<Message, bool, bool> _send;
     private readonly Lock _lock = new();
@@ -80,14 +86,18 @@ public sealed class FileTransferSource : IDisposable
         return message;
     }
 
-    /// <summary>Отзывает набор и прерывает все передачи (выключена синхронизация, конец сессии — FR-FCB-18).</summary>
-    public void Revoke()
+    /// <summary>
+    /// Отзывает набор: новые запросы получают <see cref="FileErrorCode.OfferExpired"/>.
+    /// <paramref name="cancelTransfers"/> — прервать и идущие передачи (выключена синхронизация, конец сессии — FR-FCB-18);
+    /// иначе начатая вставка доделывается (в буфер скопировано что-то новое).
+    /// </summary>
+    public void Revoke(bool cancelTransfers = true)
     {
         List<Transfer> cancelled;
         lock (_lock)
         {
             _offer = null;
-            cancelled = [.. _transfers.Values];
+            cancelled = cancelTransfers ? [.. _transfers.Values] : [];
         }
 
         foreach (var transfer in cancelled)
@@ -256,7 +266,11 @@ public sealed class FileTransferSource : IDisposable
                 {
                     while (Interlocked.Read(ref Sent) - Interlocked.Read(ref _consumed) >= WindowBytes)
                     {
-                        await _acked.WaitAsync(ct).ConfigureAwait(false);
+                        if (!await _acked.WaitAsync(AckTimeout, ct).ConfigureAwait(false))
+                        {
+                            owner._send(new FileError(requestId, FileErrorCode.ReadError), true);
+                            return;
+                        }
                     }
 
                     var read = await file.ReadAsync(buffer, ct).ConfigureAwait(false);

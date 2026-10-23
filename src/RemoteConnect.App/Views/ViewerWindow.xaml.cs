@@ -51,6 +51,7 @@ public partial class ViewerWindow : Window
         _clipboard = new ClipboardSync(connection, Dispatcher);
         _clipboard.RemoteEnabledChanged += enabled =>
             ClipboardToggle.Content = enabled ? "Буфер обмена" : "Буфер обмена (выкл. на удалённом ПК)";
+        _clipboard.StatusChanged += status => FileStatusRun.Text = status.Length > 0 ? "   " + status : string.Empty;
 
         _statsTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateStats(), Dispatcher);
 

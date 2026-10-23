@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.InteropServices;
 using RemoteConnect.Windows.Interop;
 
@@ -21,4 +21,7 @@ public static class ClipboardNotifications
     }
 
     public static void Unsubscribe(IntPtr hwnd) => NativeMethods.RemoveClipboardFormatListener(hwnd);
+
+    /// <summary>Номер содержимого буфера: меняется при каждой записи в буфер.</summary>
+    public static uint SequenceNumber => NativeMethods.GetClipboardSequenceNumber();
 }
