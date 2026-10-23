@@ -1,0 +1,215 @@
+<Window x:Class="RemoteConnect.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="clr-namespace:RemoteConnect.App.Views"
+        xmlns:vm="clr-namespace:RemoteConnect.App.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance vm:MainViewModel}"
+        Title="RemoteConnect" Width="620" Height="760" MinWidth="520" MinHeight="560"
+        Background="{StaticResource SurfaceBrush}" WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <views:StatusKindToBrushConverter x:Key="StatusBrush" />
+        <views:VisibleIfConverter x:Key="VisibleIf" />
+        <views:VisibleIfConverter x:Key="HiddenIf" Invert="True" />
+        <views:InverseBoolConverter x:Key="Not" />
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- Строка статуса сессии -->
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16,10">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Отменить" Command="{Binding CancelSessionCommand}"
+                        Visibility="{Binding CanCancelSession, Converter={StaticResource VisibleIf}}" />
+                <TextBlock Text="{Binding SessionStatus}" Foreground="{Binding SessionStatusKind, Converter={StaticResource StatusBrush}}"
+                           TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+        <!-- Имя -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,12">
+            <DockPanel>
+                <TextBlock Text="RemoteConnect" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock Text="Ваше имя:" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBox Text="{Binding DisplayName, UpdateSourceTrigger=LostFocus}" Width="170" MaxLength="64" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <TabControl Margin="12" Padding="0" BorderThickness="0" Background="Transparent">
+            <!-- ===================== ПОДКЛЮЧИТЬСЯ ===================== -->
+            <TabItem Header="  Подключиться  " DataContext="{Binding Connect}" FontSize="14">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0" TextElement.FontSize="13">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Компьютер друга" Style="{StaticResource SectionTitle}" />
+                                <DockPanel Margin="0,0,0,10">
+                                    <Button DockPanel.Dock="Right" Content="Вставить из буфера" Margin="8,0,0,0" Command="{Binding PasteCommand}"
+                                            ToolTip="Вставить адрес и пароль, скопированные на компьютере друга" />
+                                    <ComboBox IsEditable="True" ItemsSource="{Binding History}" Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding IsIdle}" Padding="6,5" ToolTip="IP-адрес и порт, например 203.0.113.5:47800" />
+                                </DockPanel>
+                                <TextBlock Text="Пароль" Style="{StaticResource Muted}" Margin="0,0,0,4" />
+                                <PasswordBox x:Name="ConnectPassword" PasswordChanged="ConnectPassword_PasswordChanged" IsEnabled="{Binding IsIdle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Что сделать после подключения" Style="{StaticResource SectionTitle}" />
+                                <RadioButton IsChecked="{Binding IsController}" IsEnabled="{Binding IsIdle}">
+                                    <TextBlock><Run FontWeight="SemiBold">Управлять удалённым ПК</Run><LineBreak /><Run Foreground="{StaticResource MutedBrush}">Вы видите экран друга и управляете им</Run></TextBlock>
+                                </RadioButton>
+                                <RadioButton IsChecked="{Binding IsController, Converter={StaticResource Not}}" IsEnabled="{Binding IsIdle}">
+                                    <TextBlock><Run FontWeight="SemiBold">Разрешить управление моим ПК</Run><LineBreak /><Run Foreground="{StaticResource MutedBrush}">Друг видит ваш экран и управляет им — вы подтвердите это в отдельном окне</Run></TextBlock>
+                                </RadioButton>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Подключиться" Style="{StaticResource PrimaryButton}" Command="{Binding ConnectCommand}" MinWidth="150" />
+                            <Button Content="Отмена" Margin="8,0,0,0" Command="{Binding CancelCommand}" Visibility="{Binding IsConnecting, Converter={StaticResource VisibleIf}}" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusKind, Converter={StaticResource StatusBrush}}"
+                                   TextWrapping="Wrap" Margin="0,12,0,0" Visibility="{Binding StatusText, Converter={StaticResource VisibleIf}}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ===================== ХОСТ ===================== -->
+            <TabItem Header="  Хост (ожидать подключения)  " DataContext="{Binding Host}" FontSize="14">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0" TextElement.FontSize="13">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="{Binding StartStopText}" Command="{Binding StartStopCommand}" MinWidth="170">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                        <Setter Property="Background" Value="{StaticResource DangerBrush}" />
+                                                        <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusKind, Converter={StaticResource StatusBrush}}"
+                                               FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding NetworkText}" Foreground="{Binding NetworkKind, Converter={StaticResource StatusBrush}}" TextWrapping="Wrap"
+                                           Margin="0,10,0,0" Visibility="{Binding NetworkText, Converter={StaticResource VisibleIf}}" />
+                                <TextBlock Text="{Binding AutoStopText}" Style="{StaticResource Muted}" Margin="0,6,0,0"
+                                           Visibility="{Binding AutoStopText, Converter={StaticResource VisibleIf}}" />
+                                <TextBlock Text="{Binding Notice}" Foreground="{StaticResource AccentBrush}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Visibility="{Binding Notice, Converter={StaticResource VisibleIf}}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Данные для друга -->
+                        <Border Style="{StaticResource Card}" Visibility="{Binding IsRunning, Converter={StaticResource VisibleIf}}">
+                            <StackPanel>
+                                <TextBlock Text="Отправьте другу" Style="{StaticResource SectionTitle}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition />
+                                        <RowDefinition />
+                                        <RowDefinition />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="Адрес:" Style="{StaticResource Muted}" Margin="0,0,12,6" />
+                                    <TextBox Grid.Column="1" IsReadOnly="True" BorderThickness="0" Padding="0" Background="Transparent" FontSize="16" FontFamily="Consolas"
+                                             Text="{Binding ConnectionAddress, Mode=OneWay, TargetNullValue='определяется…'}" Margin="0,0,0,6" />
+                                    <TextBlock Grid.Row="1" Text="Пароль:" Style="{StaticResource Muted}" Margin="0,0,12,6" />
+                                    <TextBox Grid.Row="1" Grid.Column="1" IsReadOnly="True" BorderThickness="0" Padding="0" Background="Transparent" FontSize="16" FontFamily="Consolas"
+                                             Text="{Binding OneTimePassword, Mode=OneWay, TargetNullValue='постоянный (сообщите сами)'}" Margin="0,0,0,6" />
+                                    <TextBlock Grid.Row="2" Text="Код хоста:" Style="{StaticResource Muted}" Margin="0,0,12,0" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" IsReadOnly="True" BorderThickness="0" Padding="0" Background="Transparent" FontFamily="Consolas"
+                                             Text="{Binding Fingerprint, Mode=OneWay}" ToolTip="Друг может сверить этот код со своим окном подтверждения" />
+                                </Grid>
+                                <Button Content="Скопировать" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="0,12,0,0" Command="{Binding CopyCommand}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Настройки -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel IsEnabled="{Binding CanEdit}">
+                                <TextBlock Text="Настройки ожидания" Style="{StaticResource SectionTitle}" />
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="24" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="70" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Порт:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBox Grid.Column="1" Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}" MaxLength="5" />
+                                    <TextBlock Grid.Column="3" Text="Авто-остановка через" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBox Grid.Column="4" Text="{Binding AutoStopMinutes, UpdateSourceTrigger=PropertyChanged}" MaxLength="4" ToolTip="0 — не останавливать" />
+                                    <TextBlock Grid.Column="5" Text="мин" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                </Grid>
+                                <RadioButton IsChecked="{Binding IsOneTimePassword}">
+                                    <TextBlock><Run FontWeight="SemiBold">Одноразовый пароль</Run><Run Foreground="{StaticResource MutedBrush}"> — новый при каждом запуске ожидания</Run></TextBlock>
+                                </RadioButton>
+                                <RadioButton IsChecked="{Binding IsOneTimePassword, Converter={StaticResource Not}}">
+                                    <TextBlock><Run FontWeight="SemiBold">Постоянный пароль</Run><Run Foreground="{StaticResource MutedBrush}"> — задаёте сами</Run></TextBlock>
+                                </RadioButton>
+                                <DockPanel Margin="22,4,0,0" Visibility="{Binding IsOneTimePassword, Converter={StaticResource HiddenIf}}">
+                                    <Button DockPanel.Dock="Right" Content="Сохранить пароль" Margin="8,0,0,0" Command="{Binding SavePermanentPasswordCommand}" />
+                                    <PasswordBox x:Name="PermanentPassword" PasswordChanged="PermanentPassword_PasswordChanged" />
+                                </DockPanel>
+                                <TextBlock Margin="22,4,0,0" Style="{StaticResource Muted}" Text="Пароль задан. Можно сменить, введя новый."
+                                           Visibility="{Binding HasPermanentPassword, Converter={StaticResource VisibleIf}}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Блокировки -->
+                        <Border Style="{StaticResource Card}" Visibility="{Binding HasBlocked, Converter={StaticResource VisibleIf}}">
+                            <StackPanel>
+                                <TextBlock Text="Заблокированные адреса" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,8" Text="5 неверных паролей подряд — блокировка на 5 минут. Если ошибся друг, снимите блокировку." />
+                                <ItemsControl ItemsSource="{Binding BlockedAddresses}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="0,2">
+                                                <Button DockPanel.Dock="Right" Content="Разблокировать" Style="{StaticResource LinkButton}"
+                                                        Command="{Binding DataContext.UnblockCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                                <TextBlock VerticalAlignment="Center"><Run Text="{Binding Address, Mode=OneWay}" FontFamily="Consolas" /><Run Text="   " /><Run Text="{Binding Remaining, Mode=OneWay}" Foreground="{StaticResource MutedBrush}" /></TextBlock>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Дополнительно -->
+                        <Expander Header="Дополнительно" Margin="0,0,0,12">
+                            <Border Style="{StaticResource Card}" Margin="0,8,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Локальные адреса (для одной сети, Tailscale/ZeroTier или ручного проброса порта):" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                    <ItemsControl ItemsSource="{Binding LocalAddresses}" FontFamily="Consolas" Margin="0,0,0,10" />
+                                    <WrapPanel>
+                                        <Button Content="Обновить адреса" Command="{Binding RefreshLocalAddressesCommand}" Margin="0,0,8,8" />
+                                        <Button Content="Добавить правило брандмауэра" Command="{Binding AddFirewallRuleCommand}" Margin="0,0,8,8"
+                                                ToolTip="Нужно, если Windows не спросила разрешение при первом запуске ожидания" />
+                                        <Button Content="Перезапустить от администратора" Command="{Binding RestartAsAdminCommand}" Margin="0,0,8,8"
+                                                ToolTip="Чтобы друг мог управлять окнами, запущенными от администратора" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

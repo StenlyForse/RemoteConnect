@@ -1,0 +1,28 @@
+<Window x:Class="RemoteConnect.App.Views.ViewerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RemoteConnect" Width="1280" Height="800" MinWidth="480" MinHeight="320"
+        Background="#0B1220" WindowStartupLocation="CenterScreen">
+    <DockPanel>
+        <Border x:Name="Toolbar" DockPanel.Dock="Top" Background="#111827" Padding="10,6">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <TextBlock x:Name="Stats" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,14,0" FontFamily="Consolas" FontSize="12" />
+                    <ComboBox x:Name="Monitors" MinWidth="170" Margin="0,0,8,0" SelectionChanged="Monitors_SelectionChanged" Visibility="Collapsed" />
+                    <Button x:Name="FullScreenButton" Content="Полный экран" Click="FullScreen_Click" Margin="0,0,8,0" Padding="10,4" />
+                    <Button Content="Отключить" Style="{StaticResource DangerButton}" Click="Disconnect_Click" Padding="12,4" />
+                </StackPanel>
+                <TextBlock Foreground="White" VerticalAlignment="Center" FontSize="13">
+                    <Run x:Name="PeerName" FontWeight="SemiBold" /><Run Text="   " /><Run x:Name="FingerprintRun" Foreground="#64748B" FontFamily="Consolas" FontSize="11" />
+                    <Run x:Name="InputDisabledRun" Foreground="#FBBF24" Text="" />
+                </TextBlock>
+            </DockPanel>
+        </Border>
+        <Grid x:Name="Surface" Background="#0B1220" ClipToBounds="True">
+            <TextBlock x:Name="Placeholder" Text="Ожидание изображения…" Foreground="#64748B" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Image x:Name="Screen" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   RenderOptions.BitmapScalingMode="HighQuality" Focusable="True" Cursor="Arrow"
+                   MouseMove="Screen_MouseMove" MouseDown="Screen_MouseDown" MouseUp="Screen_MouseUp" MouseWheel="Screen_MouseWheel" />
+        </Grid>
+    </DockPanel>
+</Window>
