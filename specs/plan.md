@@ -16,7 +16,7 @@
 | Сертификат хоста | Самоподписанный ECDSA P-256 через `CertificateRequest`, хранится в PFX, ключ защищён DPAPI | FR-SEC-1, без внешних зависимостей |
 | Проверка пароля | Challenge-response: `HMAC-SHA256(PBKDF2(пароль, соль), nonce ‖ отпечаток сертификата хоста)` | Пароль не передаётся (FR-SEC-2); привязка к сертификату мешает переиспользовать ответ через подменённый хост |
 | Хранение пароля | Хранится только PBKDF2-ключ (600 000 итераций, SHA-256), зашифрованный DPAPI | FR-SEC-3 |
-| UPnP | Библиотека Mono.Nat (UPnP IGD + NAT-PMP) | Поддерживается, умеет оба протокола |
+| UPnP | Собственный клиент UPnP IGD: SSDP через каждый физический интерфейс + напрямую на шлюз, SOAP AddPortMapping/DeletePortMapping/GetExternalIPAddress | Mono.Nat не находил роутер при включённом VPN (multicast уходил в туннель) |
 | Внешний IP | HTTPS-запрос к api.ipify.org, запасной — icanhazip.com | FR-NET-3 |
 | Захват экрана | Desktop Duplication API через Vortice.Direct3D11/DXGI; запасной путь — GDI `BitBlt` | DXGI отдаёт список изменённых областей (dirty rects) — основа FR-SCR-2 и NFR-6 |
 | Сжатие | Разбиение кадра на плитки 64×64, отправка изменённых плиток в JPEG через libjpeg-turbo (обёртка TurboJpegWrapper); запасной кодек — WIC | Быстрее WPF-кодеков в разы, NFR-5/NFR-6 |
@@ -209,6 +209,7 @@ TLS-сессия по loopback, блокировки, захват и JPEG, ре
 | TLS 1.3 | TLS 1.2 или 1.3 — по возможностям ОС | SChannel в Windows 10 не поддерживает TLS 1.3 на стороне сервера |
 | Сообщения `ConsentRequest`, `CursorPos`/`CursorShape` | Не нужны: управляемая сторона знает свою роль из handshake; курсор рисуется прямо в кадр | Меньше сообщений, проще протокол |
 | Microsoft.Windows.CsWin32 | Ручные P/Invoke в `RemoteConnect.Windows/Interop` | Нужен небольшой набор функций |
+| Mono.Nat (UPnP + NAT-PMP) | Свой UPnP-клиент, без NAT-PMP (v0.1.1) | Mono.Nat не находил роутер при включённом VPN; NAT-PMP почти не встречается у домашних роутеров |
 
 ### Не сделано / следующие шаги
 

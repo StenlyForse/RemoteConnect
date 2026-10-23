@@ -5,32 +5,32 @@ namespace RemoteConnect.Core.Network;
 
 public enum NatVerdict
 {
-    /// <summary>Внешний IP роутера совпадает с публичным — белый IP.</summary>
+    /// <summary>У роутера белый внешний IP.</summary>
     PublicAddress,
 
     /// <summary>Роутер получил серый адрес от провайдера — CGNAT (FR-NET-4).</summary>
     Cgnat,
 
-    /// <summary>Данных недостаточно (нет UPnP или нет ответа сервиса определения IP).</summary>
+    /// <summary>Внешний IP роутера неизвестен (нет UPnP).</summary>
     Unknown,
 }
 
 public static class NatClassifier
 {
-    public static NatVerdict Classify(IPAddress? routerExternal, IPAddress? publicAddress)
+    /// <summary>
+    /// Вердикт по внешнему IP роутера. Ответ внешнего сервиса для вердикта не используется:
+    /// при включённом VPN это адрес VPN, а не роутера.
+    /// </summary>
+    public static NatVerdict Classify(IPAddress? routerExternal) => routerExternal switch
     {
-        if (routerExternal is not null && IsPrivateOrShared(routerExternal))
-        {
-            return NatVerdict.Cgnat;
-        }
+        null => NatVerdict.Unknown,
+        _ when IsPrivateOrShared(routerExternal) => NatVerdict.Cgnat,
+        _ => NatVerdict.PublicAddress,
+    };
 
-        if (routerExternal is null || publicAddress is null)
-        {
-            return NatVerdict.Unknown;
-        }
-
-        return Normalize(routerExternal).Equals(Normalize(publicAddress)) ? NatVerdict.PublicAddress : NatVerdict.Cgnat;
-    }
+    /// <summary>Адрес для строки подключения: белый IP роутера, иначе — ответ внешнего сервиса (FR-NET-3).</summary>
+    public static IPAddress? ChooseConnectionAddress(IPAddress? routerExternal, IPAddress? publicAddress) =>
+        Classify(routerExternal) == NatVerdict.PublicAddress ? routerExternal : publicAddress;
 
     /// <summary>Частные (RFC 1918), CGNAT (100.64.0.0/10), loopback и link-local адреса.</summary>
     public static bool IsPrivateOrShared(IPAddress address)

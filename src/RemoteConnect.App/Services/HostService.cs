@@ -30,9 +30,14 @@ public sealed record HostSnapshot(
     IPAddress? RouterAddress,
     IPAddress? PublicAddress,
     NatVerdict Nat,
-    ProbeState Reachability)
+    ProbeState Reachability,
+    string? VpnInterface = null,
+    IPAddress? LanAddress = null)
 {
     public static readonly HostSnapshot Stopped = new(false, 0, null, null, ProbeState.NotStarted, null, null, null, NatVerdict.Unknown, ProbeState.NotStarted);
+
+    /// <summary>Адрес для друга (FR-NET-3).</summary>
+    public IPAddress? ConnectionAddress => NatClassifier.ChooseConnectionAddress(RouterAddress, PublicAddress);
 }
 
 /// <summary>
@@ -274,7 +279,7 @@ public sealed class HostService(
         catch (Exception ex)
         {
             Log.Warning(ex, "Ошибка UPnP");
-            upnp = new PortMappingResult(false, null, $"Ошибка UPnP: {ex.Message}");
+            upnp = new PortMappingResult(false, null, null, $"Ошибка UPnP: {ex.Message}");
         }
 
         var publicAddress = await publicTask;
@@ -283,11 +288,15 @@ public sealed class HostService(
             return;
         }
 
-        var nat = NatClassifier.Classify(upnp.RouterExternalAddress, publicAddress);
-        Log.Information("UPnP: {Ok} {Error}; внешний IP роутера {Router}, публичный IP {Public}, вердикт {Nat}",
-            upnp.Success, upnp.Error, upnp.RouterExternalAddress, publicAddress, nat);
+        var nat = NatClassifier.Classify(upnp.RouterExternalAddress);
+        var vpn = NetworkInfo.DetectVpnInterface();
+        var address = NatClassifier.ChooseConnectionAddress(upnp.RouterExternalAddress, publicAddress);
+        Log.Information("UPnP: {Ok} {Error}; локальный {Local}, внешний IP роутера {Router}, публичный IP {Public}, вердикт {Nat}, VPN {Vpn}",
+            upnp.Success, upnp.Error, upnp.LocalAddress, upnp.RouterExternalAddress, publicAddress, nat, vpn);
 
-        var canProbe = upnp.Success && publicAddress is not null && nat != NatVerdict.Cgnat;
+        // С включённым VPN самопроверка бессмысленна: ответ уйдёт в туннель.
+        // Проверяем и без UPnP: порт мог быть проброшен вручную.
+        var canProbe = address is not null && nat != NatVerdict.Cgnat && vpn is null;
         Update(s => s with
         {
             Upnp = upnp.Success ? ProbeState.Ok : ProbeState.Failed,
@@ -295,12 +304,14 @@ public sealed class HostService(
             RouterAddress = upnp.RouterExternalAddress,
             PublicAddress = publicAddress,
             Nat = nat,
+            VpnInterface = vpn,
+            LanAddress = upnp.LocalAddress ?? UpnpPortMapper.GetLanInterfaces().Select(i => i.Local).FirstOrDefault(),
             Reachability = canProbe ? ProbeState.InProgress : ProbeState.NotStarted,
         });
 
         if (canProbe)
         {
-            var reachable = await NetworkInfo.TryConnectAsync(publicAddress!, port, TimeSpan.FromSeconds(3), ct);
+            var reachable = await NetworkInfo.TryConnectAsync(address!, port, TimeSpan.FromSeconds(3), ct);
             if (!ct.IsCancellationRequested)
             {
                 Update(s => s with { Reachability = reachable ? ProbeState.Ok : ProbeState.Failed });

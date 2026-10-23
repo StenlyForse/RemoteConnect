@@ -57,6 +57,34 @@ public static class NetworkInfo
     }
 
     /// <summary>
+    /// Имя VPN-адаптера, через который идёт интернет-трафик, или null (FR-NET-12).
+    /// Признак: маршрут к публичному адресу ведёт не через физический интерфейс со шлюзом.
+    /// </summary>
+    public static string? DetectVpnInterface()
+    {
+        IPAddress routeLocal;
+        try
+        {
+            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Connect(new IPEndPoint(IPAddress.Parse("1.1.1.1"), 53));
+            routeLocal = ((IPEndPoint)socket.LocalEndPoint!).Address;
+        }
+        catch (SocketException)
+        {
+            return null;
+        }
+
+        if (UpnpPortMapper.GetLanInterfaces().Any(i => i.Local.Equals(routeLocal)))
+        {
+            return null;
+        }
+
+        var nic = NetworkInterface.GetAllNetworkInterfaces()
+            .FirstOrDefault(n => n.GetIPProperties().UnicastAddresses.Any(u => u.Address.Equals(routeLocal)));
+        return nic is null ? routeLocal.ToString() : $"{nic.Name} ({nic.Description})";
+    }
+
+    /// <summary>
     /// Пробное подключение к собственному внешнему адресу. Успех доказывает доступность,
     /// неудача ничего не доказывает: роутер может не поддерживать hairpin NAT (В1).
     /// </summary>

@@ -116,14 +116,24 @@ public class NetworkTests
     }
 
     [Theory]
-    [InlineData("203.0.113.5", "203.0.113.5", NatVerdict.PublicAddress)]
-    [InlineData("100.70.1.2", "203.0.113.5", NatVerdict.Cgnat)]
-    [InlineData("100.70.1.2", null, NatVerdict.Cgnat)]
-    [InlineData("198.51.100.7", "203.0.113.5", NatVerdict.Cgnat)]
-    [InlineData(null, "203.0.113.5", NatVerdict.Unknown)]
-    public void Classify(string? router, string? publicIp, NatVerdict expected)
+    [InlineData("203.0.113.5", NatVerdict.PublicAddress)]
+    [InlineData("100.70.1.2", NatVerdict.Cgnat)]
+    [InlineData("192.168.1.1", NatVerdict.Cgnat)]
+    [InlineData(null, NatVerdict.Unknown)]
+    public void Classify_ByRouterAddress(string? router, NatVerdict expected)
     {
-        Assert.Equal(expected, NatClassifier.Classify(router is null ? null : IPAddress.Parse(router), publicIp is null ? null : IPAddress.Parse(publicIp)));
+        Assert.Equal(expected, NatClassifier.Classify(router is null ? null : IPAddress.Parse(router)));
+    }
+
+    [Theory]
+    [InlineData("198.51.100.20", "203.0.113.45", "198.51.100.20")] // VPN: внешний сервис видит адрес VPN
+    [InlineData("100.70.1.2", "203.0.113.5", "203.0.113.5")]
+    [InlineData(null, "203.0.113.5", "203.0.113.5")]
+    [InlineData(null, null, null)]
+    public void ChooseConnectionAddress_PrefersRouterPublicIp(string? router, string? publicIp, string? expected)
+    {
+        var chosen = NatClassifier.ChooseConnectionAddress(router is null ? null : IPAddress.Parse(router), publicIp is null ? null : IPAddress.Parse(publicIp));
+        Assert.Equal(expected, chosen?.ToString());
     }
 
     [Theory]

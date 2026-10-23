@@ -274,14 +274,28 @@ public sealed partial class HostViewModel : ObservableObject
             return;
         }
 
-        var address = s.PublicAddress ?? s.RouterAddress;
+        var address = s.ConnectionAddress;
         ConnectionAddress = address is null ? null : new ConnectionTarget(address.ToString(), s.Port, null).ToString();
+
+        if (s.VpnInterface is { } vpn && s.Upnp != ProbeState.InProgress)
+        {
+            StatusText = $"Ожидание на порту {s.Port}, но включён VPN — друг не сможет подключиться";
+            StatusKind = StatusKind.Warning;
+            NetworkText =
+                $"Интернет-трафик этого компьютера идёт через VPN «{vpn}». Входящее подключение друга дойдёт через роутер, " +
+                "но ответ уйдёт в VPN-туннель, и соединение не установится. Отключите VPN на время сессии и перезапустите ожидание. " +
+                "Либо пусть хостом будет друг: вы подключитесь к нему и выберете роль." +
+                (s.Upnp == ProbeState.Ok ? " Порт на роутере при этом уже открыт." : string.Empty);
+            NetworkKind = StatusKind.Warning;
+            return;
+        }
 
         (StatusText, StatusKind) = (s.Upnp, s.Nat, s.Reachability) switch
         {
             (ProbeState.InProgress, _, _) => ($"Ожидание подключений на порту {s.Port}. Настраиваю роутер…", StatusKind.Info),
             (_, NatVerdict.Cgnat, _) => ($"Ожидание на порту {s.Port}, но из интернета подключиться не получится", StatusKind.Warning),
-            (ProbeState.Ok, _, ProbeState.Ok) => ($"Готово: ожидание подключений на порту {s.Port}", StatusKind.Success),
+            (_, _, ProbeState.Ok) => ($"Готово: ожидание подключений на порту {s.Port}", StatusKind.Success),
+            (ProbeState.Failed, _, ProbeState.InProgress) => ($"Ожидание подключений на порту {s.Port}. Проверяю доступность…", StatusKind.Info),
             (ProbeState.Ok, _, _) => ($"Ожидание подключений на порту {s.Port}", StatusKind.Success),
             _ => ($"Ожидание на порту {s.Port}, но роутер настроить не удалось", StatusKind.Warning),
         };
@@ -294,13 +308,16 @@ public sealed partial class HostViewModel : ObservableObject
                  "Варианты: пусть хостом будет друг (вы подключитесь к нему и выберете роль), закажите у провайдера белый IP или используйте Tailscale/ZeroTier.",
                     StatusKind.Warning),
             (ProbeState.Ok, _, ProbeState.Ok) => ("Порт открыт на роутере через UPnP и доступен из интернета.", StatusKind.Success),
+            (_, _, ProbeState.Ok) => ("Порт доступен из интернета (проброшен на роутере вручную).", StatusKind.Success),
             (ProbeState.Ok, _, ProbeState.InProgress) => ("Порт открыт на роутере через UPnP. Проверяю доступность…", StatusKind.Info),
+            (_, _, ProbeState.InProgress) => ("UPnP не сработал. Проверяю, проброшен ли порт вручную…", StatusKind.Info),
             (ProbeState.Ok, _, ProbeState.Failed) =>
                 ("Порт открыт через UPnP. Проверить доступность изнутри сети не удалось — роутер может не поддерживать такую проверку. Просто попросите друга подключиться.",
                     StatusKind.Info),
             (ProbeState.Ok, _, _) => ("Порт открыт на роутере через UPnP.", StatusKind.Success),
-            _ => ($"{s.UpnpError} Если роутер не поддерживает UPnP, пробросьте TCP-порт {s.Port} на этот компьютер вручную (адрес — в списке локальных ниже). " +
-                  "Внутри одной сети или через Tailscale/ZeroTier можно подключаться по локальному адресу.",
+            _ => ($"{s.UpnpError} Пробросьте порт вручную в настройках роутера (раздел «Проброс портов» / «Port Forwarding»): " +
+                  $"TCP, внешний и внутренний порт {s.Port}, локальный адрес {s.LanAddress?.ToString() ?? "этого компьютера"}. " +
+                  "Если порт уже проброшен вручную, а проверка не прошла (не все роутеры её позволяют), просто попросите друга подключиться.",
                     StatusKind.Warning),
         };
     }
@@ -310,8 +327,7 @@ public sealed partial class HostViewModel : ObservableObject
 
     private string ConnectionAddressHost()
     {
-        var s = _host.Snapshot;
-        return (s.PublicAddress ?? s.RouterAddress)?.ToString() ?? string.Empty;
+        return _host.Snapshot.ConnectionAddress?.ToString() ?? string.Empty;
     }
 
     private void Tick()
