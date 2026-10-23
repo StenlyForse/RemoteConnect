@@ -1,13 +1,11 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
+using RemoteConnect.Core.Protocol;
 using RemoteConnect.Windows.Interop;
 using ComIDataObject = System.Runtime.InteropServices.ComTypes.IDataObject;
 using ComIStream = System.Runtime.InteropServices.ComTypes.IStream;
 
 namespace RemoteConnect.Windows.Clipboard;
-
-/// <summary>Элемент набора: относительный путь (через <c>\</c>), папка или файл, размер, дата изменения.</summary>
-public sealed record VirtualFileEntry(string RelativePath, bool IsDirectory, long Size, DateTime LastWriteUtc);
 
 /// <summary>
 /// «Виртуальные файлы» для буфера обмена Windows (spec-file-clipboard FR-FCB-6..10):
@@ -49,12 +47,12 @@ public sealed class VirtualFileDataObject : ComIDataObject, IDataObjectAsyncCapa
     private static readonly short CfContents = (short)NativeMethods.RegisterClipboardFormat(FileContentsFormat);
     private static readonly short CfDropEffect = (short)NativeMethods.RegisterClipboardFormat(PreferredDropEffectFormat);
 
-    private readonly IReadOnlyList<VirtualFileEntry> _entries;
+    private readonly IReadOnlyList<FileOfferEntry> _entries;
     private readonly Func<int, Stream> _openFile;
     private bool _asyncMode = true;
     private bool _inOperation;
 
-    public VirtualFileDataObject(IReadOnlyList<VirtualFileEntry> entries, Func<int, Stream> openFile)
+    public VirtualFileDataObject(IReadOnlyList<FileOfferEntry> entries, Func<int, Stream> openFile)
     {
         if (entries.Any(e => e.RelativePath.Length >= MaxPathChars))
         {
@@ -71,7 +69,7 @@ public sealed class VirtualFileDataObject : ComIDataObject, IDataObjectAsyncCapa
     /// <summary>Асинхронная вставка закончилась (успешно, с ошибкой или отменой).</summary>
     public event Action<int>? OperationEnded;
 
-    public IReadOnlyList<VirtualFileEntry> Entries => _entries;
+    public IReadOnlyList<FileOfferEntry> Entries => _entries;
 
     // ---------------- IDataObject ----------------
 
