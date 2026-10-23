@@ -13,6 +13,9 @@
             <ToggleButton x:Name="ViewOnly" Content="Только просмотр" Margin="16,0,0,0" Padding="10,4" Cursor="Hand"
                           Checked="ViewOnly_Changed" Unchecked="ViewOnly_Changed"
                           ToolTip="Запретить удалённый ввод: друг будет только видеть экран" />
+            <ToggleButton x:Name="ClipboardToggle" Content="Буфер обмена" IsChecked="True" Margin="8,0,0,0" Padding="10,4" Cursor="Hand"
+                          Checked="Clipboard_Changed" Unchecked="Clipboard_Changed"
+                          ToolTip="Синхронизировать буфер обмена с собеседником (текст и картинки)" />
             <Button Content="Отключить" Margin="8,0,0,0" Padding="12,4" FontWeight="SemiBold" Click="Disconnect_Click" Cursor="Hand" />
         </StackPanel>
     </Border>

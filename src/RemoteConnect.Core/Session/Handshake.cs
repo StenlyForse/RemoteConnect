@@ -29,7 +29,8 @@ public sealed record HostHandshakeResult(Hello Hello);
 
 public static class Handshake
 {
-    public const int ProtocolVersion = 1;
+    /// <summary>2 — добавлен буфер обмена (v0.2).</summary>
+    public const int ProtocolVersion = 2;
     public static readonly TimeSpan StepTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>

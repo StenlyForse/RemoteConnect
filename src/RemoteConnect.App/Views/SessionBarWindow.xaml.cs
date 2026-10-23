@@ -28,6 +28,14 @@ public partial class SessionBarWindow : Window
 
     public event Action<bool>? ViewOnlyChanged;
 
+    public event Action<bool>? ClipboardChanged;
+
+    /// <summary>Показывает, что собеседник выключил синхронизацию буфера (FR-CLP-4).</summary>
+    public void SetRemoteClipboardEnabled(bool enabled)
+    {
+        ClipboardToggle.Content = enabled ? "Буфер обмена" : "Буфер обмена (выкл. у собеседника)";
+    }
+
     public void CloseForced()
     {
         _forceClose = true;
@@ -51,6 +59,8 @@ public partial class SessionBarWindow : Window
         Topmost = false;
         Topmost = true;
     }
+
+    private void Clipboard_Changed(object sender, RoutedEventArgs e) => ClipboardChanged?.Invoke(ClipboardToggle.IsChecked == true);
 
     private void Disconnect_Click(object sender, RoutedEventArgs e) => DisconnectRequested?.Invoke();
 

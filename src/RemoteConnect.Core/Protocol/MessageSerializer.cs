@@ -95,6 +95,13 @@ public static class MessageSerializer
             case Bye m:
                 w.Write((byte)m.Reason);
                 break;
+            case ClipboardData m:
+                w.Write((byte)m.Format);
+                WriteBlob(w, m.Data);
+                break;
+            case ClipboardEnabled m:
+                w.Write(m.Enabled);
+                break;
             default:
                 throw new ArgumentException($"Неизвестное сообщение {message.GetType().Name}", nameof(message));
         }
@@ -122,6 +129,8 @@ public static class MessageSerializer
                 MessageType.Ping => new Ping(r.ReadInt64()),
                 MessageType.Pong => new Pong(r.ReadInt64()),
                 MessageType.Bye => new Bye(ReadEnum<DisconnectReason>(r)),
+                MessageType.ClipboardData => new ClipboardData(ReadEnum<ClipboardFormat>(r), ReadBlob(r)),
+                MessageType.ClipboardEnabled => new ClipboardEnabled(r.ReadBoolean()),
                 _ => throw new ProtocolException($"Неизвестный тип сообщения {(byte)type}"),
             };
         }

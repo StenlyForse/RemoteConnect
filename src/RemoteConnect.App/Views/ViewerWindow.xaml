@@ -8,6 +8,9 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <TextBlock x:Name="Stats" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,14,0" FontFamily="Consolas" FontSize="12" />
+                    <ToggleButton x:Name="ClipboardToggle" Content="Буфер обмена" IsChecked="True" Margin="0,0,8,0" Padding="10,4"
+                                  Checked="Clipboard_Changed" Unchecked="Clipboard_Changed"
+                                  ToolTip="Синхронизировать буфер обмена с удалённым ПК (текст и картинки)" />
                     <ComboBox x:Name="Monitors" MinWidth="170" Margin="0,0,8,0" SelectionChanged="Monitors_SelectionChanged" Visibility="Collapsed" />
                     <Button x:Name="FullScreenButton" Content="Полный экран" Click="FullScreen_Click" Margin="0,0,8,0" Padding="10,4" />
                     <Button Content="Отключить" Style="{StaticResource DangerButton}" Click="Disconnect_Click" Padding="12,4" />

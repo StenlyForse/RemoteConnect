@@ -1,3 +1,4 @@
+using System.Windows.Threading;
 using RemoteConnect.App.Views;
 using RemoteConnect.Core.Protocol;
 using RemoteConnect.Core.Session;
@@ -14,6 +15,7 @@ public sealed class ControlledSession(Connection connection, string peerName, in
 {
     private readonly InputInjector _injector = new();
     private readonly ScreenStreamer _streamer = new(connection, jpegQuality);
+    private readonly ClipboardSync _clipboard = new(connection, Dispatcher.CurrentDispatcher);
     private volatile bool _inputEnabled = true;
 
     /// <summary>Вызывается на UI-потоке; завершается, когда соединение закрыто.</summary>
@@ -32,13 +34,17 @@ public sealed class ControlledSession(Connection connection, string peerName, in
 
             connection.Send(new InputEnabled(!viewOnly));
         };
+        bar.ClipboardChanged += enabled => _clipboard.SetLocalEnabled(enabled);
+        _clipboard.RemoteEnabledChanged += bar.SetRemoteClipboardEnabled;
         bar.Show();
+        _clipboard.Start();
 
         var streamTask = Task.Run(() => _streamer.RunAsync(cts.Token));
         var inputTask = Task.Run(() => InputLoopAsync(cts.Token));
 
         var info = await connection.Completion;
         await cts.CancelAsync();
+        _clipboard.Dispose();
         _injector.ReleaseAll();
         bar.CloseForced();
 
@@ -87,6 +93,9 @@ public sealed class ControlledSession(Connection connection, string peerName, in
                     break;
                 case SelectMonitor select:
                     _streamer.RequestMonitor(select.Index);
+                    break;
+                default:
+                    _clipboard.TryHandle(message);
                     break;
             }
         }

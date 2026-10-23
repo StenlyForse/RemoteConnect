@@ -8,6 +8,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using RemoteConnect.App.Sessions;
 using RemoteConnect.Core.Imaging;
 using RemoteConnect.Core.Protocol;
 using RemoteConnect.Core.Session;
@@ -28,6 +29,7 @@ public partial class ViewerWindow : Window
 {
     private readonly Connection _connection;
     private readonly DispatcherTimer _statsTimer;
+    private readonly ClipboardSync _clipboard;
     private WriteableBitmap? _bitmap;
     private LowLevelKeyboardHook? _hook;
     private IntPtr _hwnd;
@@ -46,12 +48,17 @@ public partial class ViewerWindow : Window
         FingerprintRun.Text = fingerprint;
         Title = $"{peerName} — RemoteConnect";
 
+        _clipboard = new ClipboardSync(connection, Dispatcher);
+        _clipboard.RemoteEnabledChanged += enabled =>
+            ClipboardToggle.Content = enabled ? "Буфер обмена" : "Буфер обмена (выкл. на удалённом ПК)";
+
         _statsTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateStats(), Dispatcher);
 
         Loaded += (_, _) =>
         {
             _hwnd = new WindowInteropHelper(this).Handle;
             _statsTimer.Start();
+            _clipboard.Start();
             _ = Task.Run(ReceiveLoopAsync);
             _ = WatchConnectionAsync();
         };
@@ -69,6 +76,7 @@ public partial class ViewerWindow : Window
     {
         RemoveHook();
         _statsTimer.Stop();
+        _clipboard.Dispose();
         if (!_closedByConnection)
         {
             _ = _connection.CloseAsync(DisconnectReason.UserClosed);
@@ -106,6 +114,9 @@ public partial class ViewerWindow : Window
                     case InputEnabled input:
                         _remoteInputEnabled = input.Enabled;
                         await Dispatcher.InvokeAsync(() => InputDisabledRun.Text = input.Enabled ? string.Empty : "   ввод запрещён удалённой стороной");
+                        break;
+                    default:
+                        _clipboard.TryHandle(message);
                         break;
                 }
             }
@@ -320,6 +331,8 @@ public partial class ViewerWindow : Window
             FullScreenButton.Content = "Выйти из полного экрана";
         }
     }
+
+    private void Clipboard_Changed(object sender, RoutedEventArgs e) => _clipboard?.SetLocalEnabled(ClipboardToggle.IsChecked == true);
 
     private void Disconnect_Click(object sender, RoutedEventArgs e) => Close();
 }

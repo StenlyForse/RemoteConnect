@@ -18,6 +18,8 @@ public enum MessageType : byte
     Ping = 14,
     Pong = 15,
     Bye = 16,
+    ClipboardData = 17,
+    ClipboardEnabled = 18,
 }
 
 /// <summary>Роль стороны в сессии. Не зависит от того, кто к кому подключился по сети.</summary>
@@ -70,6 +72,15 @@ public enum MouseButton : byte
     Middle = 3,
     X1 = 4,
     X2 = 5,
+}
+
+public enum ClipboardFormat : byte
+{
+    /// <summary>Текст в UTF-8.</summary>
+    Text = 1,
+
+    /// <summary>Картинка в PNG.</summary>
+    Image = 2,
 }
 
 public abstract record Message
@@ -160,4 +171,14 @@ public sealed record Pong(long Timestamp) : Message
 public sealed record Bye(DisconnectReason Reason) : Message
 {
     public override MessageType Type => MessageType.Bye;
+}
+
+public sealed record ClipboardData(ClipboardFormat Format, byte[] Data) : Message
+{
+    public override MessageType Type => MessageType.ClipboardData;
+}
+
+public sealed record ClipboardEnabled(bool Enabled) : Message
+{
+    public override MessageType Type => MessageType.ClipboardEnabled;
 }

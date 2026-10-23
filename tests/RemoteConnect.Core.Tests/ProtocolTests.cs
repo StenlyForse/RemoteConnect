@@ -18,6 +18,7 @@ public class ProtocolTests
         new Ping(123456789),
         new Pong(-1),
         new Bye(DisconnectReason.ConsentDenied),
+        new ClipboardEnabled(false),
     ];
 
     [Theory]
@@ -56,6 +57,15 @@ public class ProtocolTests
         Assert.Equal(2, result.Tiles.Count);
         Assert.Equal(message.Tiles[0].Data, result.Tiles[0].Data);
         Assert.Equal((64, 0, 64, 64), (result.Tiles[1].X, result.Tiles[1].Y, result.Tiles[1].Width, result.Tiles[1].Height));
+    }
+
+    [Fact]
+    public async Task ClipboardData_RoundTrip()
+    {
+        var message = new ClipboardData(ClipboardFormat.Image, [0x89, 0x50, 0x4E, 0x47]);
+        var result = Assert.IsType<ClipboardData>(await RoundTrip(message));
+        Assert.Equal(ClipboardFormat.Image, result.Format);
+        Assert.Equal(message.Data, result.Data);
     }
 
     [Fact]
