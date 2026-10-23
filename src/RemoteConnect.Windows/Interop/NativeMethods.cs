@@ -243,5 +243,32 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
+
+    public const uint GMEM_MOVEABLE = 0x0002;
+
+    [DllImport("ole32.dll")]
+    public static extern int OleInitialize(IntPtr pvReserved);
+
+    [DllImport("ole32.dll")]
+    public static extern int OleSetClipboard(System.Runtime.InteropServices.ComTypes.IDataObject? pDataObj);
+
+    [DllImport("ole32.dll")]
+    public static extern int OleIsCurrentClipboard(System.Runtime.InteropServices.ComTypes.IDataObject pDataObj);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern uint RegisterClipboardFormat(string lpszFormat);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GlobalAlloc(uint uFlags, UIntPtr dwBytes);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GlobalLock(IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GlobalUnlock(IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GlobalFree(IntPtr hMem);
 }
 #pragma warning restore SA1307, SA1310, IDE1006
