@@ -19,6 +19,11 @@ public class ProtocolTests
         new Pong(-1),
         new Bye(DisconnectReason.ConsentDenied),
         new ClipboardEnabled(false),
+        new FileOpen(5, 77, 9999),
+        new FileAck(5, 5_000_000_000),
+        new FileEnd(5),
+        new FileError(5, FileErrorCode.Changed),
+        new FileCancel(-3),
     ];
 
     [Theory]
@@ -66,6 +71,62 @@ public class ProtocolTests
         var result = Assert.IsType<ClipboardData>(await RoundTrip(message));
         Assert.Equal(ClipboardFormat.Image, result.Format);
         Assert.Equal(message.Data, result.Data);
+    }
+
+    [Fact]
+    public async Task FileOffer_RoundTrip()
+    {
+        var date = new DateTime(2026, 10, 23, 12, 30, 15, 123, DateTimeKind.Utc);
+        var message = new FileOffer(
+            42,
+            [
+                new FileOfferEntry("Отчёты", true, 0, date),
+                new FileOfferEntry(@"Отчёты\пустая", true, 0, date),
+                new FileOfferEntry(@"Отчёты\итоги 2026.xlsx", false, 5_000_000_000, date.AddDays(-1)),
+            ]);
+        var result = Assert.IsType<FileOffer>(await RoundTrip(message));
+        Assert.Equal(42, result.OfferId);
+        Assert.Equal(message.Entries, result.Entries);
+        Assert.Equal(DateTimeKind.Utc, result.Entries[2].LastWriteUtc.Kind);
+    }
+
+    [Fact]
+    public async Task FileOffer_TenThousandEntries_RoundTrip()
+    {
+        var entries = Enumerable.Range(0, 10_000).Select(i => new FileOfferEntry($"файл{i}.txt", false, i, DateTime.UnixEpoch)).ToList();
+        var result = Assert.IsType<FileOffer>(await RoundTrip(new FileOffer(1, entries)));
+        Assert.Equal(10_000, result.Entries.Count);
+    }
+
+    [Fact]
+    public async Task FileOffer_RejectsTooManyEntries()
+    {
+        var bytes = MessageFramer.Serialize(new FileOffer(1, []));
+        BitConverter.TryWriteBytes(bytes.AsSpan(MessageFramer.HeaderSize + 4, 4), 10_001);
+        await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
+    }
+
+    [Fact]
+    public async Task FileOffer_RejectsDirectoryWithSize()
+    {
+        var bytes = MessageFramer.Serialize(new FileOffer(1, [new FileOfferEntry("a", true, 5, DateTime.UnixEpoch)]));
+        await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
+    }
+
+    [Fact]
+    public async Task FileChunk_RoundTrip()
+    {
+        var data = Enumerable.Range(0, FileChunk.MaxSize).Select(i => (byte)i).ToArray();
+        var result = Assert.IsType<FileChunk>(await RoundTrip(new FileChunk(9, data)));
+        Assert.Equal(9, result.RequestId);
+        Assert.Equal(data, result.Data);
+    }
+
+    [Fact]
+    public async Task FileChunk_RejectsOversized()
+    {
+        var bytes = MessageFramer.Serialize(new FileChunk(9, new byte[FileChunk.MaxSize + 1]));
+        await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
     }
 
     [Fact]

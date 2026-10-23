@@ -1,4 +1,4 @@
-namespace RemoteConnect.Core.Protocol;
+﻿namespace RemoteConnect.Core.Protocol;
 
 public enum MessageType : byte
 {
@@ -20,6 +20,13 @@ public enum MessageType : byte
     Bye = 16,
     ClipboardData = 17,
     ClipboardEnabled = 18,
+    FileOffer = 19,
+    FileOpen = 20,
+    FileChunk = 21,
+    FileAck = 22,
+    FileEnd = 23,
+    FileError = 24,
+    FileCancel = 25,
 }
 
 /// <summary>Роль стороны в сессии. Не зависит от того, кто к кому подключился по сети.</summary>
@@ -81,6 +88,21 @@ public enum ClipboardFormat : byte
 
     /// <summary>Картинка в PNG.</summary>
     Image = 2,
+}
+
+public enum FileErrorCode : byte
+{
+    /// <summary>Набор заменён новым или отозван.</summary>
+    OfferExpired = 1,
+    NotFound = 2,
+    AccessDenied = 3,
+
+    /// <summary>Размер файла изменился после копирования.</summary>
+    Changed = 4,
+    ReadError = 5,
+
+    /// <summary>Неверный индекс, папка вместо файла, слишком много одновременных передач.</summary>
+    BadRequest = 6,
 }
 
 public abstract record Message
@@ -181,4 +203,48 @@ public sealed record ClipboardData(ClipboardFormat Format, byte[] Data) : Messag
 public sealed record ClipboardEnabled(bool Enabled) : Message
 {
     public override MessageType Type => MessageType.ClipboardEnabled;
+}
+
+/// <summary>Элемент набора файлов: относительный путь (через <c>\</c>), папка или файл, размер, дата изменения (UTC).</summary>
+public sealed record FileOfferEntry(string RelativePath, bool IsDirectory, long Size, DateTime LastWriteUtc);
+
+/// <summary>Набор файлов в буфере обмена источника (spec-file-clipboard). Новый набор заменяет предыдущий.</summary>
+public sealed record FileOffer(int OfferId, IReadOnlyList<FileOfferEntry> Entries) : Message
+{
+    public override MessageType Type => MessageType.FileOffer;
+}
+
+/// <summary>Запрос содержимого файла <paramref name="Index"/> из набора <paramref name="OfferId"/>.</summary>
+public sealed record FileOpen(int RequestId, int OfferId, int Index) : Message
+{
+    public override MessageType Type => MessageType.FileOpen;
+}
+
+/// <summary>Очередная часть файла (не больше <see cref="MaxSize"/>). Отправляется фоновой очередью.</summary>
+public sealed record FileChunk(int RequestId, byte[] Data) : Message
+{
+    public const int MaxSize = 64 * 1024;
+
+    public override MessageType Type => MessageType.FileChunk;
+}
+
+/// <summary>Сколько байт файла получатель уже прочитал (всего с начала) — открывает окно отправки.</summary>
+public sealed record FileAck(int RequestId, long BytesConsumed) : Message
+{
+    public override MessageType Type => MessageType.FileAck;
+}
+
+public sealed record FileEnd(int RequestId) : Message
+{
+    public override MessageType Type => MessageType.FileEnd;
+}
+
+public sealed record FileError(int RequestId, FileErrorCode Code) : Message
+{
+    public override MessageType Type => MessageType.FileError;
+}
+
+public sealed record FileCancel(int RequestId) : Message
+{
+    public override MessageType Type => MessageType.FileCancel;
 }

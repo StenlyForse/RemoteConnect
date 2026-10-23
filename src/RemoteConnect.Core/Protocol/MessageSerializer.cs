@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace RemoteConnect.Core.Protocol;
 
@@ -10,6 +10,9 @@ public static class MessageSerializer
     private const int MaxStringBytes = 1024;
     private const int MaxBlobBytes = MessageFramer.MaxMessageSize;
     private const int MaxListCount = 4096;
+
+    /// <summary>Лимит набора файлов — 10 000 элементов (FR-FCB-3).</summary>
+    public const int MaxFileOfferEntries = 10_000;
 
     public static void Write(Message message, BinaryWriter w)
     {
@@ -102,6 +105,40 @@ public static class MessageSerializer
             case ClipboardEnabled m:
                 w.Write(m.Enabled);
                 break;
+            case FileOffer m:
+                w.Write(m.OfferId);
+                w.Write(m.Entries.Count);
+                foreach (var e in m.Entries)
+                {
+                    WriteString(w, e.RelativePath);
+                    w.Write(e.IsDirectory);
+                    w.Write(e.Size);
+                    w.Write(e.LastWriteUtc.Ticks);
+                }
+                break;
+            case FileOpen m:
+                w.Write(m.RequestId);
+                w.Write(m.OfferId);
+                w.Write(m.Index);
+                break;
+            case FileChunk m:
+                w.Write(m.RequestId);
+                WriteBlob(w, m.Data);
+                break;
+            case FileAck m:
+                w.Write(m.RequestId);
+                w.Write(m.BytesConsumed);
+                break;
+            case FileEnd m:
+                w.Write(m.RequestId);
+                break;
+            case FileError m:
+                w.Write(m.RequestId);
+                w.Write((byte)m.Code);
+                break;
+            case FileCancel m:
+                w.Write(m.RequestId);
+                break;
             default:
                 throw new ArgumentException($"Неизвестное сообщение {message.GetType().Name}", nameof(message));
         }
@@ -131,6 +168,13 @@ public static class MessageSerializer
                 MessageType.Bye => new Bye(ReadEnum<DisconnectReason>(r)),
                 MessageType.ClipboardData => new ClipboardData(ReadEnum<ClipboardFormat>(r), ReadBlob(r)),
                 MessageType.ClipboardEnabled => new ClipboardEnabled(r.ReadBoolean()),
+                MessageType.FileOffer => ReadFileOffer(r),
+                MessageType.FileOpen => new FileOpen(r.ReadInt32(), r.ReadInt32(), r.ReadInt32()),
+                MessageType.FileChunk => ReadFileChunk(r),
+                MessageType.FileAck => new FileAck(r.ReadInt32(), r.ReadInt64()),
+                MessageType.FileEnd => new FileEnd(r.ReadInt32()),
+                MessageType.FileError => new FileError(r.ReadInt32(), ReadEnum<FileErrorCode>(r)),
+                MessageType.FileCancel => new FileCancel(r.ReadInt32()),
                 _ => throw new ProtocolException($"Неизвестный тип сообщения {(byte)type}"),
             };
         }
@@ -163,6 +207,45 @@ public static class MessageSerializer
         }
 
         return new FrameTiles(frame, tiles);
+    }
+
+    private static FileOffer ReadFileOffer(BinaryReader r)
+    {
+        var offerId = r.ReadInt32();
+        var count = r.ReadInt32();
+        if (count is < 0 or > MaxFileOfferEntries)
+        {
+            throw new ProtocolException($"Недопустимое число файлов: {count}");
+        }
+
+        var entries = new List<FileOfferEntry>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var path = ReadString(r);
+            var isDirectory = r.ReadBoolean();
+            var size = r.ReadInt64();
+            var ticks = r.ReadInt64();
+            if (size < 0 || (isDirectory && size != 0) || ticks < DateTime.MinValue.Ticks || ticks > DateTime.MaxValue.Ticks)
+            {
+                throw new ProtocolException($"Недопустимый элемент набора файлов: {path}");
+            }
+
+            entries.Add(new FileOfferEntry(path, isDirectory, size, new DateTime(ticks, DateTimeKind.Utc)));
+        }
+
+        return new FileOffer(offerId, entries);
+    }
+
+    private static FileChunk ReadFileChunk(BinaryReader r)
+    {
+        var requestId = r.ReadInt32();
+        var data = ReadBlob(r);
+        if (data.Length > FileChunk.MaxSize)
+        {
+            throw new ProtocolException($"Слишком большая часть файла: {data.Length}");
+        }
+
+        return new FileChunk(requestId, data);
     }
 
     private static TEnum ReadEnum<TEnum>(BinaryReader r) where TEnum : struct, Enum

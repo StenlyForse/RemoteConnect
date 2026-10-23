@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Threading.Channels;
 using RemoteConnect.Core.Protocol;
 
@@ -27,6 +27,10 @@ public sealed class Connection : IAsyncDisposable
     private readonly TimeProvider _time;
     private readonly TimeSpan _inactivityTimeout;
     private readonly Channel<Message> _outgoing = Channel.CreateUnbounded<Message>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<Message> _background = Channel.CreateUnbounded<Message>(new UnboundedChannelOptions { SingleReader = true });
+
+    /// <summary>«Есть что отправить» для цикла отправки; сигналы схлопываются в один.</summary>
+    private readonly Channel<bool> _sendSignal = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true });
     private readonly Channel<Message> _incoming = Channel.CreateUnbounded<Message>(new UnboundedChannelOptions { SingleWriter = true });
     private readonly CancellationTokenSource _cts = new();
     private readonly TaskCompletionSource<DisconnectInfo> _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -58,8 +62,21 @@ public sealed class Connection : IAsyncDisposable
         _ = Task.Run(KeepAliveLoopAsync);
     }
 
-    /// <summary>Ставит сообщение в очередь отправки. Не блокирует.</summary>
-    public bool Send(Message message) => _outgoing.Writer.TryWrite(message);
+    /// <summary>
+    /// Ставит сообщение в очередь отправки. Не блокирует.
+    /// <paramref name="background"/> — фоновая очередь (части файлов): её сообщения уходят, только когда обычная
+    /// очередь пуста, по одному, поэтому кадр экрана ждёт не дольше одного фонового сообщения (FR-FCB-15).
+    /// </summary>
+    public bool Send(Message message, bool background = false)
+    {
+        if (!(background ? _background : _outgoing).Writer.TryWrite(message))
+        {
+            return false;
+        }
+
+        _sendSignal.Writer.TryWrite(true);
+        return true;
+    }
 
     public async ValueTask<Message> ReceiveAsync(CancellationToken ct = default)
     {
@@ -101,7 +118,7 @@ public sealed class Connection : IAsyncDisposable
 
         if (!_closed.Task.IsCompleted)
         {
-            _outgoing.Writer.TryWrite(new Bye(reason));
+            Send(new Bye(reason));
             _outgoing.Writer.TryComplete();
             await Task.WhenAny(_sendLoop, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
         }
@@ -125,15 +142,30 @@ public sealed class Connection : IAsyncDisposable
     {
         try
         {
-            await foreach (var message in _outgoing.Reader.ReadAllAsync(_cts.Token).ConfigureAwait(false))
+            while (true)
             {
-                await MessageFramer.WriteAsync(_stream, message, _cts.Token).ConfigureAwait(false);
-                if (message is Bye)
+                if (_outgoing.Reader.TryRead(out var message) || _background.Reader.TryRead(out message))
                 {
-                    await _stream.FlushAsync(_cts.Token).ConfigureAwait(false);
+                    await MessageFramer.WriteAsync(_stream, message, _cts.Token).ConfigureAwait(false);
+                    if (message is Bye)
+                    {
+                        await _stream.FlushAsync(_cts.Token).ConfigureAwait(false);
+                        return;
+                    }
+
+                    continue;
+                }
+
+                if (_outgoing.Reader.Completion.IsCompleted)
+                {
                     return;
                 }
+
+                await _sendSignal.Reader.ReadAsync(_cts.Token).ConfigureAwait(false);
             }
+        }
+        catch (ChannelClosedException)
+        {
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -215,6 +247,8 @@ public sealed class Connection : IAsyncDisposable
 
         _incoming.Writer.TryComplete();
         _outgoing.Writer.TryComplete();
+        _background.Writer.TryComplete();
+        _sendSignal.Writer.TryComplete();
         try
         {
             _cts.Cancel();

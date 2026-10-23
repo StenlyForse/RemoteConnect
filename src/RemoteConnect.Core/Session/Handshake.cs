@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using RemoteConnect.Core.Protocol;
 using RemoteConnect.Core.Security;
 
@@ -29,8 +29,8 @@ public sealed record HostHandshakeResult(Hello Hello);
 
 public static class Handshake
 {
-    /// <summary>2 — добавлен буфер обмена (v0.2).</summary>
-    public const int ProtocolVersion = 2;
+    /// <summary>2 — добавлен буфер обмена (v0.2); 3 — файлы через буфер обмена (v0.3).</summary>
+    public const int ProtocolVersion = 3;
     public static readonly TimeSpan StepTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>
