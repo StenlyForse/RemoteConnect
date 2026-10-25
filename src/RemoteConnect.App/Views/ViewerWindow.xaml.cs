@@ -45,6 +45,7 @@ public partial class ViewerWindow : Window
     public ViewerWindow(Connection connection, string myName, string peerName, string fingerprint)
     {
         InitializeComponent();
+        WindowPlacement.FitToWorkArea(this, maximizeIfTooBig: true);
         _connection = connection;
         PeerName.Text = peerName;
         FingerprintRun.Text = fingerprint;

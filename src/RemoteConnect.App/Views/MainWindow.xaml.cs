@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
+        WindowPlacement.FitToWorkArea(this, maximizeIfTooBig: false);
         _viewModel = viewModel;
         DataContext = viewModel;
         viewModel.Connect.PasswordFilled += password => ConnectPassword.Password = password;
