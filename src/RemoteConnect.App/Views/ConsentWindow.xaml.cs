@@ -15,6 +15,7 @@ public partial class ConsentWindow : Window
     private readonly TaskCompletionSource<ConsentDecision> _result = new();
     private readonly DispatcherTimer _timer;
     private readonly DateTime _deadline;
+    private bool _closing;
 
     private ConsentWindow(string peerName, string fingerprint, TimeSpan timeout)
     {
@@ -50,6 +51,8 @@ public partial class ConsentWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        // Закрытие крестиком = отказ. Окно уже закрывается — повторный Close() бросил бы InvalidOperationException.
+        _closing = true;
         Complete(ConsentDecision.Denied);
         base.OnClosing(e);
     }
@@ -78,7 +81,7 @@ public partial class ConsentWindow : Window
         }
 
         _timer.Stop();
-        if (IsLoaded)
+        if (IsLoaded && !_closing)
         {
             Close();
         }
