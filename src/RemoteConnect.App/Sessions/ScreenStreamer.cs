@@ -96,7 +96,7 @@ public sealed class ScreenStreamer(Connection connection, int jpegQuality)
                         .AsOrdered()
                         .Select(r => new EncodedTile(r.X, r.Y, r.Width, r.Height, JpegTileCodec.Encode(frame, stride, r, jpegQuality)))
                         .ToList();
-                    connection.Send(new FrameTiles(++frameNumber, tiles));
+                    connection.Send(new FrameTiles(++frameNumber, (byte)jpegQuality, tiles));
                     sent = true;
                     (previous, current) = (current, previous ?? new byte[current.Length]);
                 }

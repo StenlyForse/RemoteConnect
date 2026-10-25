@@ -32,6 +32,7 @@ public enum MessageType : byte
     // стороны разных версий показывают понятное сообщение о несовместимости (plan-chat §3).
     AppVersion = 26,
     ChatMessage = 27,
+    StreamMode = 28,
 }
 
 /// <summary>Роль стороны в сессии. Не зависит от того, кто к кому подключился по сети.</summary>
@@ -95,6 +96,18 @@ public enum ClipboardFormat : byte
     Image = 2,
 }
 
+/// <summary>Режим подстройки изображения под канал, выбранный управляющим (FR-ADP-6).</summary>
+public enum StreamModeKind : byte
+{
+    Auto = 0,
+
+    /// <summary>Чёткость важнее плавности.</summary>
+    BestQuality = 1,
+
+    /// <summary>Плавность важнее чёткости.</summary>
+    Faster = 2,
+}
+
 public enum FileErrorCode : byte
 {
     /// <summary>Набор заменён новым или отозван.</summary>
@@ -149,7 +162,8 @@ public sealed record ScreenInfo(IReadOnlyList<MonitorDescriptor> Monitors, int A
 
 public sealed record EncodedTile(int X, int Y, int Width, int Height, byte[] Data);
 
-public sealed record FrameTiles(int FrameNumber, IReadOnlyList<EncodedTile> Tiles) : Message
+/// <summary>Изменённые плитки кадра. <paramref name="Quality"/> — качество JPEG, с которым они закодированы (FR-ADP-7).</summary>
+public sealed record FrameTiles(int FrameNumber, byte Quality, IReadOnlyList<EncodedTile> Tiles) : Message
 {
     public override MessageType Type => MessageType.FrameTiles;
 }
@@ -271,4 +285,10 @@ public sealed record ChatMessage(string Text) : Message
     public const int MaxBytes = 16 * 1024;
 
     public override MessageType Type => MessageType.ChatMessage;
+}
+
+/// <summary>Управляющий выбрал режим подстройки изображения (spec-v0.5, FR-ADP-6). Действует до конца сессии.</summary>
+public sealed record StreamMode(StreamModeKind Mode) : Message
+{
+    public override MessageType Type => MessageType.StreamMode;
 }

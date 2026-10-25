@@ -134,6 +134,23 @@ public sealed class LoopbackSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task V04Client_BothSidesSeeEachOthersVersion()
+    {
+        var hostTask = RunHostAsync();
+        var client = await ConnectRawAsync();
+        client.Send(new Hello(4, "friend-0.4", SessionRole.Controller));
+
+        // Клиент v0.4 уже умеет обмен версиями — хост v0.5 называет ему свою, отказ с номером собеседника.
+        Assert.Equal(HostAppVersion, (await client.ReceiveAsync<AppVersion>(TimeSpan.FromSeconds(5))).Version);
+        client.Send(new AppVersion("0.4.0"));
+        var result = await client.ReceiveAsync<AuthResult>(TimeSpan.FromSeconds(5));
+        var (_, hostResult) = await hostTask;
+
+        Assert.Equal(AuthStatus.VersionMismatch, result.Status);
+        Assert.Equal((AuthStatus.VersionMismatch, "0.4.0"), (hostResult.Status, hostResult.PeerAppVersion));
+    }
+
+    [Fact]
     public async Task NewerClient_BothSidesSeeEachOthersVersion()
     {
         var hostTask = RunHostAsync();

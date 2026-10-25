@@ -55,6 +55,7 @@ public static class MessageSerializer
                 break;
             case FrameTiles m:
                 w.Write(m.FrameNumber);
+                w.Write(m.Quality);
                 w.Write(m.Tiles.Count);
                 foreach (var t in m.Tiles)
                 {
@@ -145,6 +146,9 @@ public static class MessageSerializer
             case ChatMessage m:
                 WriteText(w, m.Text, ChatMessage.MaxLength, ChatMessage.MaxBytes);
                 break;
+            case StreamMode m:
+                w.Write((byte)m.Mode);
+                break;
             default:
                 throw new ArgumentException($"Неизвестное сообщение {message.GetType().Name}", nameof(message));
         }
@@ -183,6 +187,7 @@ public static class MessageSerializer
                 MessageType.FileCancel => new FileCancel(r.ReadInt32()),
                 MessageType.AppVersion => new AppVersion(ReadText(r, AppVersion.MaxLength, MaxStringBytes)),
                 MessageType.ChatMessage => new ChatMessage(ReadText(r, ChatMessage.MaxLength, ChatMessage.MaxBytes)),
+                MessageType.StreamMode => new StreamMode(ReadEnum<StreamModeKind>(r)),
                 _ => throw new ProtocolException($"Неизвестный тип сообщения {(byte)type}"),
             };
         }
@@ -207,6 +212,7 @@ public static class MessageSerializer
     private static FrameTiles ReadFrameTiles(BinaryReader r)
     {
         var frame = r.ReadInt32();
+        var quality = r.ReadByte();
         var count = ReadCount(r);
         var tiles = new List<EncodedTile>(count);
         for (var i = 0; i < count; i++)
@@ -214,7 +220,7 @@ public static class MessageSerializer
             tiles.Add(new EncodedTile(r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), ReadBlob(r)));
         }
 
-        return new FrameTiles(frame, tiles);
+        return new FrameTiles(frame, quality, tiles);
     }
 
     private static FileOffer ReadFileOffer(BinaryReader r)

@@ -39,8 +39,9 @@ public sealed record ClientHandshakeResult(AuthResult Result, string? PeerAppVer
 
 public static class Handshake
 {
-    /// <summary>2 — добавлен буфер обмена (v0.2); 3 — файлы через буфер обмена (v0.3); 4 — чат и обмен версиями (v0.4).</summary>
-    public const int ProtocolVersion = 4;
+    /// <summary>2 — добавлен буфер обмена (v0.2); 3 — файлы через буфер обмена (v0.3); 4 — чат и обмен версиями (v0.4);
+    /// 5 — качество под канал (v0.5).</summary>
+    public const int ProtocolVersion = 5;
 
     /// <summary>С этой версии протокола стороны обмениваются <see cref="AppVersion"/> сразу после Hello.</summary>
     public const int FirstVersionExchangeProtocol = 4;

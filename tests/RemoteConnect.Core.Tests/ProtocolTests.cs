@@ -26,6 +26,7 @@ public class ProtocolTests
         new FileCancel(-3),
         new AppVersion("0.4.0"),
         new ChatMessage("Привет!\nСмотри https://example.com/a?b=1"),
+        new StreamMode(StreamModeKind.Faster),
     ];
 
     [Theory]
@@ -58,9 +59,9 @@ public class ProtocolTests
     [Fact]
     public async Task FrameTiles_RoundTrip()
     {
-        var message = new FrameTiles(7, [new EncodedTile(0, 64, 128, 64, [0xFF, 0xD8]), new EncodedTile(64, 0, 64, 64, [])]);
+        var message = new FrameTiles(7, 55, [new EncodedTile(0, 64, 128, 64, [0xFF, 0xD8]), new EncodedTile(64, 0, 64, 64, [])]);
         var result = Assert.IsType<FrameTiles>(await RoundTrip(message));
-        Assert.Equal(7, result.FrameNumber);
+        Assert.Equal((7, (byte)55), (result.FrameNumber, result.Quality));
         Assert.Equal(2, result.Tiles.Count);
         Assert.Equal(message.Tiles[0].Data, result.Tiles[0].Data);
         Assert.Equal((64, 0, 64, 64), (result.Tiles[1].X, result.Tiles[1].Y, result.Tiles[1].Width, result.Tiles[1].Height));
@@ -185,6 +186,14 @@ public class ProtocolTests
     {
         // Больше 16 КБ — отклоняется по длине, до чтения и декодирования строки.
         var bytes = TextFrame(MessageType.ChatMessage, new string('a', ChatMessage.MaxBytes + 1));
+        await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
+    }
+
+    [Fact]
+    public async Task StreamMode_RejectsUnknownMode()
+    {
+        var bytes = MessageFramer.Serialize(new StreamMode(StreamModeKind.Auto));
+        bytes[^1] = 9;
         await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
     }
 
