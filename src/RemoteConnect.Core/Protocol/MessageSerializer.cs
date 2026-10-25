@@ -56,6 +56,7 @@ public static class MessageSerializer
             case FrameTiles m:
                 w.Write(m.FrameNumber);
                 w.Write(m.Quality);
+                w.Write(m.EndOfFrame);
                 w.Write(m.Tiles.Count);
                 foreach (var t in m.Tiles)
                 {
@@ -213,6 +214,7 @@ public static class MessageSerializer
     {
         var frame = r.ReadInt32();
         var quality = r.ReadByte();
+        var endOfFrame = r.ReadBoolean();
         var count = ReadCount(r);
         var tiles = new List<EncodedTile>(count);
         for (var i = 0; i < count; i++)
@@ -220,7 +222,7 @@ public static class MessageSerializer
             tiles.Add(new EncodedTile(r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), ReadBlob(r)));
         }
 
-        return new FrameTiles(frame, quality, tiles);
+        return new FrameTiles(frame, quality, endOfFrame, tiles);
     }
 
     private static FileOffer ReadFileOffer(BinaryReader r)

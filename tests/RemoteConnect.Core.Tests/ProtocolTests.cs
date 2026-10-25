@@ -59,9 +59,9 @@ public class ProtocolTests
     [Fact]
     public async Task FrameTiles_RoundTrip()
     {
-        var message = new FrameTiles(7, 55, [new EncodedTile(0, 64, 128, 64, [0xFF, 0xD8]), new EncodedTile(64, 0, 64, 64, [])]);
+        var message = new FrameTiles(7, 55, false, [new EncodedTile(0, 64, 128, 64, [0xFF, 0xD8]), new EncodedTile(64, 0, 64, 64, [])]);
         var result = Assert.IsType<FrameTiles>(await RoundTrip(message));
-        Assert.Equal((7, (byte)55), (result.FrameNumber, result.Quality));
+        Assert.Equal((7, (byte)55, false), (result.FrameNumber, result.Quality, result.EndOfFrame));
         Assert.Equal(2, result.Tiles.Count);
         Assert.Equal(message.Tiles[0].Data, result.Tiles[0].Data);
         Assert.Equal((64, 0, 64, 64), (result.Tiles[1].X, result.Tiles[1].Y, result.Tiles[1].Width, result.Tiles[1].Height));

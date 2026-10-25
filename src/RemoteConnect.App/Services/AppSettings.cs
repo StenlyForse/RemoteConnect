@@ -41,6 +41,7 @@ public sealed class AppSettings
 
     public int AutoStopMinutes { get; set; } = 30;
 
+    /// <summary>Не используется с v0.5: качество подбирается под канал (spec-v0.5). Оставлено для совместимости файла настроек.</summary>
     public int JpegQuality { get; set; } = 70;
 
     public SessionRole ConnectRole { get; set; } = SessionRole.Controller;

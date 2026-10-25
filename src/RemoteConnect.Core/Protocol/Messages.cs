@@ -162,8 +162,12 @@ public sealed record ScreenInfo(IReadOnlyList<MonitorDescriptor> Monitors, int A
 
 public sealed record EncodedTile(int X, int Y, int Width, int Height, byte[] Data);
 
-/// <summary>Изменённые плитки кадра. <paramref name="Quality"/> — качество JPEG, с которым они закодированы (FR-ADP-7).</summary>
-public sealed record FrameTiles(int FrameNumber, byte Quality, IReadOnlyList<EncodedTile> Tiles) : Message
+/// <summary>
+/// Изменённые плитки кадра или его части. <paramref name="Quality"/> — качество JPEG плиток (FR-ADP-7).
+/// Большой кадр уходит двумя частями вплотную (оценка канала, plan-v0.5); <paramref name="EndOfFrame"/> — у последней.
+/// Каждая часть подтверждается своим <see cref="FrameAck"/>.
+/// </summary>
+public sealed record FrameTiles(int FrameNumber, byte Quality, bool EndOfFrame, IReadOnlyList<EncodedTile> Tiles) : Message
 {
     public override MessageType Type => MessageType.FrameTiles;
 }

@@ -97,7 +97,7 @@ public sealed class SessionManager(SettingsService settings, Dispatcher dispatch
         }
 
         StatusChanged?.Invoke($"Вашим компьютером управляет «{peerName}»", StatusKind.Warning);
-        var session = new ControlledSession(connection, settings.Current.DisplayName, peerName, settings.Current.JpegQuality);
+        var session = new ControlledSession(connection, settings.Current.DisplayName, peerName);
         var info = await session.RunAsync();
         return (Describe(info, peerName), StatusKind.Info);
     }

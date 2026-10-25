@@ -9,6 +9,12 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <TextBlock x:Name="Stats" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,14,0" FontFamily="Consolas" FontSize="12" />
+                    <ComboBox x:Name="QualityMode" MinWidth="150" Margin="0,0,8,0" SelectedIndex="0" SelectionChanged="QualityMode_SelectionChanged"
+                              ToolTip="Изображение подстраивается под скорость соединения. «Лучшее качество» — чётче, но может отставать; «Быстрее» — плавнее, но проще">
+                        <ComboBoxItem Content="Качество: авто" />
+                        <ComboBoxItem Content="Лучшее качество" />
+                        <ComboBoxItem Content="Быстрее" />
+                    </ComboBox>
                     <ToggleButton x:Name="ClipboardToggle" Content="Буфер обмена" IsChecked="True" Margin="0,0,8,0" Padding="10,4"
                                   Checked="Clipboard_Changed" Unchecked="Clipboard_Changed"
                                   ToolTip="Синхронизировать буфер обмена с удалённым ПК (текст, картинки, файлы)" />

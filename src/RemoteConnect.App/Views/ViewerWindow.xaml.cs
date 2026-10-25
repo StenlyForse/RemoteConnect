@@ -40,6 +40,7 @@ public partial class ViewerWindow : Window
     private bool _suppressMonitorChange;
     private long _frames;
     private long _bytes;
+    private volatile int _quality;
     private (WindowStyle Style, WindowState State, ResizeMode Resize)? _savedWindow;
 
     public ViewerWindow(Connection connection, string myName, string peerName, string fingerprint)
@@ -125,7 +126,14 @@ public partial class ViewerWindow : Window
                         var decoded = DecodeTiles(frame);
                         await Dispatcher.InvokeAsync(() => ApplyTiles(decoded), DispatcherPriority.Render);
                         _connection.Send(new FrameAck(frame.FrameNumber));
-                        Interlocked.Increment(ref _frames);
+                        _quality = frame.Quality;
+
+                        // Большой кадр приходит двумя частями — считаем кадр один раз.
+                        if (frame.EndOfFrame)
+                        {
+                            Interlocked.Increment(ref _frames);
+                        }
+
                         Interlocked.Add(ref _bytes, frame.Tiles.Sum(t => (long)t.Data.Length));
                         break;
                     case InputEnabled input:
@@ -231,7 +239,7 @@ public partial class ViewerWindow : Window
     {
         var frames = Interlocked.Exchange(ref _frames, 0);
         var kb = Interlocked.Exchange(ref _bytes, 0) / 1024;
-        Stats.Text = $"{frames} к/с  {kb} КБ/с";
+        Stats.Text = _quality > 0 ? $"{frames} к/с  {kb} КБ/с  качество {_quality}" : $"{frames} к/с  {kb} КБ/с";
     }
 
     // ---------- мышь ----------
@@ -354,6 +362,17 @@ public partial class ViewerWindow : Window
             WindowState = WindowState.Maximized;
             FullScreenButton.Content = "Выйти из полного экрана";
         }
+    }
+
+    private void QualityMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Первое срабатывание — при загрузке разметки (SelectedIndex="0"), соединения ещё нет.
+        if (_connection is null || QualityMode.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        _connection.Send(new StreamMode((StreamModeKind)QualityMode.SelectedIndex));
     }
 
     private void Clipboard_Changed(object sender, RoutedEventArgs e) => _clipboard?.SetLocalEnabled(ClipboardToggle.IsChecked == true);

@@ -12,11 +12,11 @@ namespace RemoteConnect.App.Sessions;
 /// Управляемая сторона после согласия: плашка сессии (FR-SEC-6), трансляция экрана, выполнение ввода и чат.
 /// Ввод выполняется только здесь, то есть только после «Разрешить».
 /// </summary>
-public sealed class ControlledSession(Connection connection, string myName, string peerName, int jpegQuality)
+public sealed class ControlledSession(Connection connection, string myName, string peerName)
 {
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly InputInjector _injector = new();
-    private readonly ScreenStreamer _streamer = new(connection, jpegQuality);
+    private readonly ScreenStreamer _streamer = new(connection);
     private readonly ClipboardSync _clipboard = new(connection, Dispatcher.CurrentDispatcher);
 
     // У управляемого первое входящее сообщение раскрывает панель (FR-CHT-21).
@@ -86,8 +86,11 @@ public sealed class ControlledSession(Connection connection, string myName, stri
 
             switch (message)
             {
-                case FrameAck:
-                    _streamer.OnFrameAck();
+                case FrameAck ack:
+                    _streamer.OnFrameAck(ack.FrameNumber);
+                    break;
+                case StreamMode mode:
+                    _streamer.SetMode(mode.Mode);
                     break;
                 case MouseInput mouse when _inputEnabled && _streamer.CurrentMonitor is { } monitor:
                     _injector.Mouse(mouse, monitor);
