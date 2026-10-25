@@ -1,0 +1,40 @@
+<UserControl x:Class="RemoteConnect.App.Views.ChatPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{StaticResource CardBrush}" FontFamily="Segoe UI" FontSize="13">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,8">
+            <TextBlock FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis">
+                <Run Text="Чат с " /><Run x:Name="PeerNameRun" />
+            </TextBlock>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="8">
+            <DockPanel>
+                <Button x:Name="SendButton" DockPanel.Dock="Right" Content="Отправить" Style="{StaticResource PrimaryButton}"
+                        Padding="10,5" Margin="6,0,0,0" VerticalAlignment="Bottom" Click="Send_Click" />
+                <TextBox x:Name="Input" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" MaxLength="4000"
+                         MinHeight="30" MaxHeight="120" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Center"
+                         PreviewKeyDown="Input_PreviewKeyDown" ToolTip="Enter — отправить, Shift+Enter — новая строка">
+                    <TextBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Вырезать" Command="ApplicationCommands.Cut" InputGestureText="Ctrl+X" />
+                            <MenuItem Header="Копировать" Command="ApplicationCommands.Copy" InputGestureText="Ctrl+C" />
+                            <MenuItem Header="Вставить" Command="ApplicationCommands.Paste" InputGestureText="Ctrl+V" />
+                            <Separator />
+                            <MenuItem Header="Выделить всё" Command="ApplicationCommands.SelectAll" InputGestureText="Ctrl+A" />
+                        </ContextMenu>
+                    </TextBox.ContextMenu>
+                </TextBox>
+            </DockPanel>
+        </Border>
+
+        <Grid>
+            <TextBlock x:Name="EmptyHint" Text="Сообщений пока нет. Переписка удалится, когда сессия закончится."
+                       Style="{StaticResource Muted}" TextAlignment="Center" Margin="24" VerticalAlignment="Center" />
+            <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,8,8,4">
+                <StackPanel x:Name="MessageList" />
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using RemoteConnect.App.Sessions;
+using RemoteConnect.Core.Chat;
 using RemoteConnect.Core.Imaging;
 using RemoteConnect.Core.Protocol;
 using RemoteConnect.Core.Session;
@@ -23,13 +24,14 @@ namespace RemoteConnect.App.Views;
 
 /// <summary>
 /// Окно управляющей стороны: отображение экрана (FR-SCR-3, FR-SCR-4), выбор монитора (FR-SCR-5)
-/// и передача мыши/клавиатуры (FR-INP-1..4).
+/// передача мыши/клавиатуры (FR-INP-1..4) и чат (spec-chat).
 /// </summary>
 public partial class ViewerWindow : Window
 {
     private readonly Connection _connection;
     private readonly DispatcherTimer _statsTimer;
     private readonly ClipboardSync _clipboard;
+    private readonly ChatSession _chat;
     private WriteableBitmap? _bitmap;
     private LowLevelKeyboardHook? _hook;
     private IntPtr _hwnd;
@@ -40,7 +42,7 @@ public partial class ViewerWindow : Window
     private long _bytes;
     private (WindowStyle Style, WindowState State, ResizeMode Resize)? _savedWindow;
 
-    public ViewerWindow(Connection connection, string peerName, string fingerprint)
+    public ViewerWindow(Connection connection, string myName, string peerName, string fingerprint)
     {
         InitializeComponent();
         _connection = connection;
@@ -52,6 +54,19 @@ public partial class ViewerWindow : Window
         _clipboard.RemoteEnabledChanged += enabled =>
             ClipboardToggle.Content = enabled ? "Буфер обмена" : "Буфер обмена (выкл. на удалённом ПК)";
         _clipboard.StatusChanged += status => FileStatusRun.Text = status.Length > 0 ? "   " + status : string.Empty;
+
+        // У управляющего панель сама не раскрывается — только красная точка (FR-CHT-19, FR-CHT-23).
+        _chat = new ChatSession(m => _connection.Send(m), myName, peerName, autoOpenOnFirstIncoming: false, TimeProvider.System);
+        _chat.UnreadChanged += count => ChatUnreadDot.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        Chat.Attach(_chat, peerName);
+        Chat.IsKeyboardFocusWithinChanged += (_, e) =>
+        {
+            // Клавиша, нажатая до перехода в чат, иначе осталась бы «зажатой» на удалённом ПК.
+            if ((bool)e.NewValue)
+            {
+                _connection.Send(new ReleaseAll());
+            }
+        };
 
         _statsTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateStats(), Dispatcher);
 
@@ -115,6 +130,10 @@ public partial class ViewerWindow : Window
                     case InputEnabled input:
                         _remoteInputEnabled = input.Enabled;
                         await Dispatcher.InvokeAsync(() => InputDisabledRun.Text = input.Enabled ? string.Empty : "   ввод запрещён удалённой стороной");
+                        break;
+                    case ChatMessage chat:
+                        Log.Information("Чат: получено сообщение, {Length} символов", chat.Text.Length);
+                        await Dispatcher.InvokeAsync(() => _chat.TryHandle(chat));
                         break;
                     default:
                         _clipboard.TryHandle(message);
@@ -290,10 +309,13 @@ public partial class ViewerWindow : Window
         _hook = null;
     }
 
-    /// <summary>Пока окно просмотра активно, все клавиши (включая Win и Alt+Tab) уходят на удалённую сторону.</summary>
+    /// <summary>
+    /// Пока окно просмотра активно, все клавиши (включая Win и Alt+Tab) уходят на удалённую сторону —
+    /// кроме набора в поле чата (FR-CHT-10). Перехват вызывается на UI-потоке, поэтому фокус можно проверять прямо здесь.
+    /// </summary>
     private bool OnKey(KeyboardHookEvent e)
     {
-        if (!CanSendInput || LowLevelKeyboardHook.ForegroundWindow != _hwnd)
+        if (Chat.IsKeyboardFocusWithin || !CanSendInput || LowLevelKeyboardHook.ForegroundWindow != _hwnd)
         {
             return false;
         }
@@ -336,4 +358,19 @@ public partial class ViewerWindow : Window
     private void Clipboard_Changed(object sender, RoutedEventArgs e) => _clipboard?.SetLocalEnabled(ClipboardToggle.IsChecked == true);
 
     private void Disconnect_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Chat_Click(object sender, RoutedEventArgs e)
+    {
+        var open = Chat.Visibility != Visibility.Visible;
+        Chat.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        _chat.SetPanelOpen(open);
+        if (open)
+        {
+            Chat.FocusInput();
+        }
+        else
+        {
+            Screen.Focus();
+        }
+    }
 }

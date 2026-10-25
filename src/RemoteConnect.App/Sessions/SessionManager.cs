@@ -97,7 +97,7 @@ public sealed class SessionManager(SettingsService settings, Dispatcher dispatch
         }
 
         StatusChanged?.Invoke($"Вашим компьютером управляет «{peerName}»", StatusKind.Warning);
-        var session = new ControlledSession(connection, peerName, settings.Current.JpegQuality);
+        var session = new ControlledSession(connection, settings.Current.DisplayName, peerName, settings.Current.JpegQuality);
         var info = await session.RunAsync();
         return (Describe(info, peerName), StatusKind.Info);
     }
@@ -132,7 +132,7 @@ public sealed class SessionManager(SettingsService settings, Dispatcher dispatch
         }
 
         StatusChanged?.Invoke($"Вы управляете компьютером «{peerName}»", StatusKind.Success);
-        var viewer = new ViewerWindow(connection, peerName, fingerprint);
+        var viewer = new ViewerWindow(connection, settings.Current.DisplayName, peerName, fingerprint);
         viewer.Show();
         var info = await connection.Completion;
         return (Describe(info, peerName), info.Reason is DisconnectReason.UserClosed or DisconnectReason.AppExit ? StatusKind.Info : StatusKind.Warning);

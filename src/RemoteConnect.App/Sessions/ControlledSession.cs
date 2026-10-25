@@ -1,5 +1,6 @@
 using System.Windows.Threading;
 using RemoteConnect.App.Views;
+using RemoteConnect.Core.Chat;
 using RemoteConnect.Core.Protocol;
 using RemoteConnect.Core.Session;
 using RemoteConnect.Windows.Input;
@@ -8,14 +9,18 @@ using Serilog;
 namespace RemoteConnect.App.Sessions;
 
 /// <summary>
-/// Управляемая сторона после согласия: плашка сессии (FR-SEC-6), трансляция экрана и выполнение ввода.
+/// Управляемая сторона после согласия: плашка сессии (FR-SEC-6), трансляция экрана, выполнение ввода и чат.
 /// Ввод выполняется только здесь, то есть только после «Разрешить».
 /// </summary>
-public sealed class ControlledSession(Connection connection, string peerName, int jpegQuality)
+public sealed class ControlledSession(Connection connection, string myName, string peerName, int jpegQuality)
 {
+    private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly InputInjector _injector = new();
     private readonly ScreenStreamer _streamer = new(connection, jpegQuality);
     private readonly ClipboardSync _clipboard = new(connection, Dispatcher.CurrentDispatcher);
+
+    // У управляемого первое входящее сообщение раскрывает панель (FR-CHT-21).
+    private readonly ChatSession _chat = new(m => connection.Send(m), myName, peerName, autoOpenOnFirstIncoming: true, TimeProvider.System);
     private volatile bool _inputEnabled = true;
 
     /// <summary>Вызывается на UI-потоке; завершается, когда соединение закрыто.</summary>
@@ -37,6 +42,7 @@ public sealed class ControlledSession(Connection connection, string peerName, in
         bar.ClipboardChanged += enabled => _clipboard.SetLocalEnabled(enabled);
         _clipboard.RemoteEnabledChanged += bar.SetRemoteClipboardEnabled;
         _clipboard.StatusChanged += bar.SetFileStatus;
+        bar.AttachChat(_chat, peerName);
         bar.Show();
         _clipboard.Start();
 
@@ -94,6 +100,10 @@ public sealed class ControlledSession(Connection connection, string peerName, in
                     break;
                 case SelectMonitor select:
                     _streamer.RequestMonitor(select.Index);
+                    break;
+                case ChatMessage chat:
+                    Log.Information("Чат: получено сообщение, {Length} символов", chat.Text.Length);
+                    _ = _dispatcher.InvokeAsync(() => _chat.TryHandle(chat));
                     break;
                 default:
                     _clipboard.TryHandle(message);

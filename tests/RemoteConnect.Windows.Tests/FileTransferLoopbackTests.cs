@@ -156,6 +156,95 @@ public sealed class FileTransferLoopbackTests : IDisposable
         Assert.True(Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(5));
     }
 
+    /// <summary>План чата, этап 3: сообщение чата во время передачи файла 20 МБ доставляется быстрее 1 с (NFR-CHT-1).</summary>
+    [Fact]
+    public async Task ChatMessages_OvertakeFileTransfer_BothWays()
+    {
+        var path = Path.Combine(_root, "большой.bin");
+        await File.WriteAllBytesAsync(path, RandomNumberGenerator.GetBytes(20 * 1024 * 1024));
+
+        var (host, client) = await ConnectAsync();
+        using var source = new FileTransferSource((m, background) => host.Send(m, background));
+        var receiver = new FileTransferReceiver(m => client.Send(m));
+        var sentAt = new Dictionary<string, long>();
+        var latencies = new List<(string Text, TimeSpan Latency)>();
+
+        void OnChat(ChatMessage chat)
+        {
+            lock (sentAt)
+            {
+                latencies.Add((chat.Text, Stopwatch.GetElapsedTime(sentAt[chat.Text])));
+            }
+        }
+
+        _ = PumpAsync(host, m =>
+        {
+            if (m is ChatMessage chat)
+            {
+                OnChat(chat);
+            }
+            else
+            {
+                source.Handle(m);
+            }
+        });
+        _ = PumpAsync(client, m =>
+        {
+            if (m is ChatMessage chat)
+            {
+                OnChat(chat);
+            }
+            else
+            {
+                receiver.Handle(m);
+            }
+        });
+
+        var offer = source.Offer(FileOfferBuilder.Build([path]));
+        using var stopChat = new CancellationTokenSource();
+        var chatter = Task.Run(async () =>
+        {
+            for (var i = 0; !stopChat.IsCancellationRequested; i++)
+            {
+                // Текст — уникальный ключ для замера; сторона хоста — источник файла (её очередь забита частями файла).
+                var fromHost = $"от хоста {i} — https://example.com/{i}";
+                var fromClient = $"от клиента {i}";
+                lock (sentAt)
+                {
+                    sentAt[fromHost] = Stopwatch.GetTimestamp();
+                    sentAt[fromClient] = Stopwatch.GetTimestamp();
+                }
+
+                host.Send(new ChatMessage(fromHost));
+                client.Send(new ChatMessage(fromClient));
+                await Task.Delay(50);
+            }
+        });
+
+        var content = await Task.Run(() =>
+        {
+            using var stream = receiver.Open(offer.OfferId, 0, offer.Entries[0].Size);
+            using var copy = new MemoryStream();
+            stream.CopyTo(copy, 1024 * 1024);
+            return copy.ToArray();
+        }).WaitAsync(TimeSpan.FromSeconds(60));
+
+        await stopChat.CancelAsync();
+        await chatter;
+        await Task.Delay(200);
+
+        Assert.Equal(SHA256.HashData(await File.ReadAllBytesAsync(path)), SHA256.HashData(content));
+        lock (sentAt)
+        {
+            Assert.Contains(latencies, l => l.Text.StartsWith("от хоста", StringComparison.Ordinal));
+            Assert.Contains(latencies, l => l.Text.StartsWith("от клиента", StringComparison.Ordinal));
+            var worst = latencies.MaxBy(l => l.Latency);
+            Assert.True(worst.Latency < TimeSpan.FromSeconds(1), $"«{worst.Text}» шло {worst.Latency.TotalMilliseconds} мс");
+        }
+
+        await client.CloseAsync(DisconnectReason.UserClosed);
+    }
+
     private static async Task PumpAsync(Connection connection, Action<Message> handle)
     {
         try
