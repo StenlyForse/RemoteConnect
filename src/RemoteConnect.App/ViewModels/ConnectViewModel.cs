@@ -147,8 +147,8 @@ public sealed partial class ConnectViewModel : ObservableObject
             connection.Start();
 
             SetStatus("Проверка пароля…", StatusKind.Info);
-            var result = await Handshake.RunClientAsync(connection, _settings.Current.DisplayName, role, password, certHash, ct);
-            Log.Information("Подключение к {Target}: {Status}", target, result.Status);
+            var (result, peerVersion) = await Handshake.RunClientAsync(connection, _settings.Current.DisplayName, role, password, certHash, AppInfo.Version, ct);
+            Log.Information("Подключение к {Target}: {Status}, версия собеседника {PeerVersion}", target, result.Status, peerVersion ?? "< 0.4");
 
             switch (result.Status)
             {
@@ -168,7 +168,7 @@ public sealed partial class ConnectViewModel : ObservableObject
                     SetStatus("Удалённый компьютер занят другой сессией.", StatusKind.Warning);
                     break;
                 case AuthStatus.VersionMismatch:
-                    SetStatus("У друга другая версия RemoteConnect — обновитесь до одной версии.", StatusKind.Error);
+                    SetStatus(AppInfo.DescribeVersionMismatch(peerVersion), StatusKind.Error);
                     break;
             }
         }

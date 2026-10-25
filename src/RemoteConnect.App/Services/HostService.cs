@@ -64,6 +64,9 @@ public sealed class HostService(
     /// <summary>Хост остановлен автоматически по таймеру.</summary>
     public event Action? AutoStopped;
 
+    /// <summary>Подключение отклонено из-за несовместимой версии; аргумент — версия собеседника или null, если он старше v0.4.</summary>
+    public event Action<string?>? VersionMismatch;
+
     public HostSnapshot Snapshot => _snapshot;
 
     public TimeSpan? AutoStopRemaining => _autoStop?.Remaining;
@@ -221,11 +224,17 @@ public sealed class HostService(
 
             var key = _passwordKey ?? throw new OperationCanceledException();
             var result = await Handshake.RunHostAsync(
-                connection, remoteAddress, key, _certificateHash, rateLimiter, sessions.Slot, settings.Current.DisplayName, ct);
+                connection, remoteAddress, key, _certificateHash, rateLimiter, sessions.Slot, settings.Current.DisplayName, AppInfo.Version, ct);
 
-            if (result is null)
+            if (!result.IsAccepted)
             {
-                Log.Information("Отклонено подключение от {Address}", remoteAddress);
+                Log.Information("Отклонено подключение от {Address}: {Status}, протокол {Protocol}, версия {PeerVersion}",
+                    remoteAddress, result.Status, result.Hello.ProtocolVersion, result.PeerAppVersion ?? "< 0.4");
+                if (result.Status == AuthStatus.VersionMismatch)
+                {
+                    VersionMismatch?.Invoke(result.PeerAppVersion);
+                }
+
                 return;
             }
 

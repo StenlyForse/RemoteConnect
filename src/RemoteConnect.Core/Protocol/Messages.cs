@@ -27,6 +27,11 @@ public enum MessageType : byte
     FileEnd = 23,
     FileError = 24,
     FileCancel = 25,
+
+    // Начиная с v0.4 формат и номера Hello, AuthResult и AppVersion не меняются: по ним
+    // стороны разных версий показывают понятное сообщение о несовместимости (plan-chat §3).
+    AppVersion = 26,
+    ChatMessage = 27,
 }
 
 /// <summary>Роль стороны в сессии. Не зависит от того, кто к кому подключился по сети.</summary>
@@ -247,4 +252,23 @@ public sealed record FileError(int RequestId, FileErrorCode Code) : Message
 public sealed record FileCancel(int RequestId) : Message
 {
     public override MessageType Type => MessageType.FileCancel;
+}
+
+/// <summary>Версия программы (например «0.4.0»). Отправляется при рукопожатии, только если обе стороны v0.4+.</summary>
+public sealed record AppVersion(string Version) : Message
+{
+    public const int MaxLength = 32;
+
+    public override MessageType Type => MessageType.AppVersion;
+}
+
+/// <summary>Сообщение чата (spec-chat): простой текст не длиннее <see cref="MaxLength"/> символов.</summary>
+public sealed record ChatMessage(string Text) : Message
+{
+    public const int MaxLength = 4000;
+
+    /// <summary>Лимит байт UTF-8 при разборе: 4 000 символов UTF-16 — не больше 12 000 байт.</summary>
+    public const int MaxBytes = 16 * 1024;
+
+    public override MessageType Type => MessageType.ChatMessage;
 }

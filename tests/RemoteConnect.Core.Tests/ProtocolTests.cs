@@ -24,6 +24,8 @@ public class ProtocolTests
         new FileEnd(5),
         new FileError(5, FileErrorCode.Changed),
         new FileCancel(-3),
+        new AppVersion("0.4.0"),
+        new ChatMessage("Привет!\nСмотри https://example.com/a?b=1"),
     ];
 
     [Theory]
@@ -157,6 +159,52 @@ public class ProtocolTests
         var bytes = MessageFramer.Serialize(new FrameAck(1)).Concat(new byte[] { 0 }).ToArray();
         bytes[1] = 5;
         await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
+    }
+
+    [Fact]
+    public async Task ChatMessage_MaxLength_RoundTrips()
+    {
+        var text = string.Concat(Enumerable.Repeat("Ж", ChatMessage.MaxLength - 1)) + "\n";
+        var result = Assert.IsType<ChatMessage>(await RoundTrip(new ChatMessage(text)));
+        Assert.Equal(text, result.Text);
+    }
+
+    [Fact]
+    public void ChatMessage_TooLong_IsNotSent() =>
+        Assert.Throws<ArgumentException>(() => MessageFramer.Serialize(new ChatMessage(new string('a', ChatMessage.MaxLength + 1))));
+
+    [Fact]
+    public async Task ChatMessage_RejectsMoreCharsThanLimit()
+    {
+        var bytes = TextFrame(MessageType.ChatMessage, new string('a', ChatMessage.MaxLength + 1));
+        await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
+    }
+
+    [Fact]
+    public async Task ChatMessage_RejectsMoreBytesThanLimit()
+    {
+        // Больше 16 КБ — отклоняется по длине, до чтения и декодирования строки.
+        var bytes = TextFrame(MessageType.ChatMessage, new string('a', ChatMessage.MaxBytes + 1));
+        await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
+    }
+
+    [Fact]
+    public async Task AppVersion_RejectsTooLong()
+    {
+        var bytes = TextFrame(MessageType.AppVersion, new string('9', AppVersion.MaxLength + 1));
+        await Assert.ThrowsAsync<ProtocolException>(() => MessageFramer.ReadAsync(new MemoryStream(bytes), null, default));
+    }
+
+    /// <summary>Кадр с одной строкой без проверок отправителя — как его мог бы прислать чужой клиент.</summary>
+    private static byte[] TextFrame(MessageType type, string text)
+    {
+        var data = System.Text.Encoding.UTF8.GetBytes(text);
+        var frame = new byte[MessageFramer.HeaderSize + 4 + data.Length];
+        frame[0] = (byte)type;
+        BitConverter.TryWriteBytes(frame.AsSpan(1, 4), 4 + data.Length);
+        BitConverter.TryWriteBytes(frame.AsSpan(MessageFramer.HeaderSize, 4), data.Length);
+        data.CopyTo(frame, MessageFramer.HeaderSize + 4);
+        return frame;
     }
 
     private static async Task<Message> RoundTrip(Message message)

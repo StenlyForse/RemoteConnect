@@ -139,6 +139,12 @@ public static class MessageSerializer
             case FileCancel m:
                 w.Write(m.RequestId);
                 break;
+            case AppVersion m:
+                WriteText(w, m.Version, AppVersion.MaxLength, MaxStringBytes);
+                break;
+            case ChatMessage m:
+                WriteText(w, m.Text, ChatMessage.MaxLength, ChatMessage.MaxBytes);
+                break;
             default:
                 throw new ArgumentException($"Неизвестное сообщение {message.GetType().Name}", nameof(message));
         }
@@ -175,6 +181,8 @@ public static class MessageSerializer
                 MessageType.FileEnd => new FileEnd(r.ReadInt32()),
                 MessageType.FileError => new FileError(r.ReadInt32(), ReadEnum<FileErrorCode>(r)),
                 MessageType.FileCancel => new FileCancel(r.ReadInt32()),
+                MessageType.AppVersion => new AppVersion(ReadText(r, AppVersion.MaxLength, MaxStringBytes)),
+                MessageType.ChatMessage => new ChatMessage(ReadText(r, ChatMessage.MaxLength, ChatMessage.MaxBytes)),
                 _ => throw new ProtocolException($"Неизвестный тип сообщения {(byte)type}"),
             };
         }
@@ -291,6 +299,41 @@ public static class MessageSerializer
         }
 
         return Encoding.UTF8.GetString(r.ReadBytes(length));
+    }
+
+    /// <summary>Строка с лимитом и в символах, и в байтах UTF-8.</summary>
+    private static void WriteText(BinaryWriter w, string value, int maxChars, int maxBytes)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        if (value.Length > maxChars || bytes.Length > maxBytes)
+        {
+            throw new ArgumentException("Строка слишком длинная", nameof(value));
+        }
+
+        WriteBlob(w, bytes);
+    }
+
+    private static string ReadText(BinaryReader r, int maxChars, int maxBytes)
+    {
+        var length = r.ReadInt32();
+        if (length is < 0 || length > maxBytes)
+        {
+            throw new ProtocolException($"Недопустимая длина строки: {length}");
+        }
+
+        var bytes = r.ReadBytes(length);
+        if (bytes.Length != length)
+        {
+            throw new EndOfStreamException();
+        }
+
+        var text = Encoding.UTF8.GetString(bytes);
+        if (text.Length > maxChars)
+        {
+            throw new ProtocolException($"Строка длиннее {maxChars} символов: {text.Length}");
+        }
+
+        return text;
     }
 
     private static void WriteBlob(BinaryWriter w, byte[] data)

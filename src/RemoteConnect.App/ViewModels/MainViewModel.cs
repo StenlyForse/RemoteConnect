@@ -34,6 +34,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     public SessionManager Sessions => _sessions;
 
+    /// <summary>Версия программы внизу главного окна (FR-VER-1).</summary>
+    public string Version => AppInfo.Version;
+
     [ObservableProperty]
     private string _displayName;
 

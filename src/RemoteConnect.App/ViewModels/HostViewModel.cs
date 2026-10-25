@@ -46,6 +46,7 @@ public sealed partial class HostViewModel : ObservableObject
 
         host.Changed += snapshot => dispatcher.InvokeAsync(() => Apply(snapshot));
         host.AutoStopped += () => dispatcher.InvokeAsync(() => Notice = "Ожидание остановлено автоматически: никто не подключился. Порт на роутере закрыт.");
+        host.VersionMismatch += peerVersion => dispatcher.InvokeAsync(() => Notice = "Подключение отклонено. " + AppInfo.DescribeVersionMismatch(peerVersion));
         rateLimiter.Changed += (_, _) => dispatcher.InvokeAsync(RefreshBlocked);
 
         var timer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Tick(), dispatcher);

@@ -20,6 +20,8 @@
         <!-- Строка статуса сессии -->
         <Border DockPanel.Dock="Bottom" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16,10">
             <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Version, StringFormat=Версия {0}}" Style="{StaticResource Muted}"
+                           FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0" />
                 <Button DockPanel.Dock="Right" Content="Отменить" Command="{Binding CancelSessionCommand}"
                         Visibility="{Binding CanCancelSession, Converter={StaticResource VisibleIf}}" />
                 <TextBlock Text="{Binding SessionStatus}" Foreground="{Binding SessionStatusKind, Converter={StaticResource StatusBrush}}"

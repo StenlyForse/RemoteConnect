@@ -25,19 +25,33 @@ public sealed class SessionSlot : ISessionSlot
     public void Release() => Volatile.Write(ref _busy, 0);
 }
 
-public sealed record HostHandshakeResult(Hello Hello);
+/// <summary>
+/// Итог рукопожатия на хосте. <paramref name="PeerAppVersion"/> — версия программы клиента или null,
+/// если клиент старше v0.4 и версию не сообщает.
+/// </summary>
+public sealed record HostHandshakeResult(AuthStatus Status, Hello Hello, string? PeerAppVersion)
+{
+    public bool IsAccepted => Status == AuthStatus.Ok;
+}
+
+/// <summary>Итог рукопожатия у клиента. <paramref name="PeerAppVersion"/> — версия хоста или null для хоста старше v0.4.</summary>
+public sealed record ClientHandshakeResult(AuthResult Result, string? PeerAppVersion);
 
 public static class Handshake
 {
-    /// <summary>2 — добавлен буфер обмена (v0.2); 3 — файлы через буфер обмена (v0.3).</summary>
-    public const int ProtocolVersion = 3;
+    /// <summary>2 — добавлен буфер обмена (v0.2); 3 — файлы через буфер обмена (v0.3); 4 — чат и обмен версиями (v0.4).</summary>
+    public const int ProtocolVersion = 4;
+
+    /// <summary>С этой версии протокола стороны обмениваются <see cref="AppVersion"/> сразу после Hello.</summary>
+    public const int FirstVersionExchangeProtocol = 4;
     public static readonly TimeSpan StepTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>
-    /// Сторона хоста: Hello → проверки → AuthChallenge → AuthResponse → AuthResult.
-    /// При успехе слот сессии занят и возвращается Hello клиента; иначе соединение закрыто и возвращается null.
+    /// Сторона хоста: Hello → [AppVersion ⇄ AppVersion] → проверки → AuthChallenge → AuthResponse → AuthResult.
+    /// При успехе слот сессии занят; при отказе соединение закрыто. Клиенту старше v0.4 AppVersion не отправляется:
+    /// незнакомое сообщение он счёл бы ошибкой протокола вместо «несовместимой версии».
     /// </summary>
-    public static async Task<HostHandshakeResult?> RunHostAsync(
+    public static async Task<HostHandshakeResult> RunHostAsync(
         Connection connection,
         IPAddress remoteAddress,
         PasswordKey passwordKey,
@@ -45,23 +59,33 @@ public static class Handshake
         AuthRateLimiter rateLimiter,
         ISessionSlot slot,
         string hostName,
+        string appVersion,
         CancellationToken ct)
     {
         var hello = await connection.ReceiveAsync<Hello>(StepTimeout, ct).ConfigureAwait(false);
 
+        string? peerVersion = null;
+        if (hello.ProtocolVersion >= FirstVersionExchangeProtocol)
+        {
+            connection.Send(new AppVersion(appVersion));
+            peerVersion = (await connection.ReceiveAsync<AppVersion>(StepTimeout, ct).ConfigureAwait(false)).Version;
+        }
+
+        Task<HostHandshakeResult> Reject(AuthResult result) => RejectAsync(connection, result, hello, peerVersion);
+
         if (hello.ProtocolVersion != ProtocolVersion)
         {
-            return await RejectAsync(connection, new AuthResult(AuthStatus.VersionMismatch, 0, 0, hostName)).ConfigureAwait(false);
+            return await Reject(new AuthResult(AuthStatus.VersionMismatch, 0, 0, hostName)).ConfigureAwait(false);
         }
 
         if (rateLimiter.IsBlocked(remoteAddress, out var remaining))
         {
-            return await RejectAsync(connection, Blocked(remaining, hostName)).ConfigureAwait(false);
+            return await Reject(Blocked(remaining, hostName)).ConfigureAwait(false);
         }
 
         if (slot.IsBusy)
         {
-            return await RejectAsync(connection, new AuthResult(AuthStatus.Busy, 0, 0, hostName)).ConfigureAwait(false);
+            return await Reject(new AuthResult(AuthStatus.Busy, 0, 0, hostName)).ConfigureAwait(false);
         }
 
         var nonce = PasswordVerifier.CreateNonce();
@@ -74,35 +98,47 @@ public static class Handshake
             var result = outcome.IsBlocked
                 ? Blocked(outcome.BlockedFor, hostName)
                 : new AuthResult(AuthStatus.WrongPassword, outcome.AttemptsLeft, 0, hostName);
-            return await RejectAsync(connection, result).ConfigureAwait(false);
+            return await Reject(result).ConfigureAwait(false);
         }
 
         rateLimiter.RegisterSuccess(remoteAddress);
 
         if (!slot.TryClaim())
         {
-            return await RejectAsync(connection, new AuthResult(AuthStatus.Busy, 0, 0, hostName)).ConfigureAwait(false);
+            return await Reject(new AuthResult(AuthStatus.Busy, 0, 0, hostName)).ConfigureAwait(false);
         }
 
         connection.Send(new AuthResult(AuthStatus.Ok, 0, 0, hostName));
-        return new HostHandshakeResult(hello);
+        return new HostHandshakeResult(AuthStatus.Ok, hello, peerVersion);
     }
 
-    /// <summary>Сторона клиента. Возвращает итоговый AuthResult (при отказе соединение закрывает хост).</summary>
-    public static async Task<AuthResult> RunClientAsync(
+    /// <summary>
+    /// Сторона клиента. Возвращает итоговый AuthResult (при отказе соединение закрывает хост).
+    /// Хост v0.4+ первым присылает AppVersion; хост старше сразу отвечает AuthChallenge или AuthResult.
+    /// </summary>
+    public static async Task<ClientHandshakeResult> RunClientAsync(
         Connection connection,
         string clientName,
         SessionRole clientRole,
         string password,
         byte[] certificateHash,
+        string appVersion,
         CancellationToken ct)
     {
         connection.Send(new Hello(ProtocolVersion, clientName, clientRole));
 
+        string? peerVersion = null;
         var first = await ReceiveAnyAsync(connection, ct).ConfigureAwait(false);
+        if (first is AppVersion hostVersion)
+        {
+            peerVersion = hostVersion.Version;
+            connection.Send(new AppVersion(appVersion));
+            first = await ReceiveAnyAsync(connection, ct).ConfigureAwait(false);
+        }
+
         if (first is AuthResult early)
         {
-            return early;
+            return new ClientHandshakeResult(early, peerVersion);
         }
 
         if (first is not AuthChallenge challenge)
@@ -114,7 +150,8 @@ public static class Handshake
             () => PasswordVerifier.DeriveKey(password, challenge.Salt, challenge.Iterations), ct).ConfigureAwait(false);
         connection.Send(new AuthResponse(PasswordVerifier.ComputeProof(key, challenge.Nonce, certificateHash)));
 
-        return await connection.ReceiveAsync<AuthResult>(StepTimeout, ct).ConfigureAwait(false);
+        var result = await connection.ReceiveAsync<AuthResult>(StepTimeout, ct).ConfigureAwait(false);
+        return new ClientHandshakeResult(result, peerVersion);
     }
 
     private static async Task<Message> ReceiveAnyAsync(Connection connection, CancellationToken ct)
@@ -134,10 +171,10 @@ public static class Handshake
     private static AuthResult Blocked(TimeSpan remaining, string hostName) =>
         new(AuthStatus.Blocked, 0, (int)Math.Ceiling(remaining.TotalSeconds), hostName);
 
-    private static async Task<HostHandshakeResult?> RejectAsync(Connection connection, AuthResult result)
+    private static async Task<HostHandshakeResult> RejectAsync(Connection connection, AuthResult result, Hello hello, string? peerVersion)
     {
         connection.Send(result);
         await connection.CloseAsync(DisconnectReason.UserClosed).ConfigureAwait(false);
-        return null;
+        return new HostHandshakeResult(result.Status, hello, peerVersion);
     }
 }
